@@ -206,6 +206,8 @@ export function useAssistant() {
   useEffect(() => {
     if (isListening && statusRef.current === 'idle') {
       setStatus('listening');
+    } else if (!isListening && statusRef.current === 'listening') {
+      setStatus('idle');
     }
   }, [isListening]);
 

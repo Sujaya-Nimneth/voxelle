@@ -103,6 +103,12 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      // 'aborted' fires when the user intentionally stops — not a real error.
+      // stopListening() already sets isListening to false, so just bail out.
+      if (event.error === 'aborted') {
+        return;
+      }
+
       console.error('Speech recognition error:', event.error);
       switch (event.error) {
         case 'not-allowed':
@@ -120,9 +126,6 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
           break;
         case 'network':
           setError('Network error occurred. Please check your connection.');
-          break;
-        case 'aborted':
-          // User or system intentionally aborted — not a real error
           break;
         default:
           setError(`Speech recognition error: ${event.error}`);
