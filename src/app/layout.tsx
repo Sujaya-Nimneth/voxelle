@@ -47,7 +47,10 @@ export default function RootLayout({
       lang="en"
       className={`${manrope.variable} ${dmMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans selection:bg-cyan-500/20 selection:text-cyan-200">
+      <body
+        className="min-h-full flex flex-col font-sans selection:bg-cyan-500/20 selection:text-cyan-200"
+        suppressHydrationWarning
+      >
         {children}
       </body>
     </html>
