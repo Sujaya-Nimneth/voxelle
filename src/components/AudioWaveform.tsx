@@ -18,11 +18,11 @@ export default function AudioWaveform({ status }: AudioWaveformProps) {
   const getBarColor = () => {
     switch (status) {
       case 'listening':
-        return '#00e5ff';
+        return '#35e6ff';
       case 'processing':
-        return '#a855f7';
+        return '#926cff';
       case 'speaking':
-        return '#a855f7';
+        return '#926cff';
       default:
         return '#334155';
     }

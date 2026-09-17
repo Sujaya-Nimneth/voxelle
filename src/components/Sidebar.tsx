@@ -152,12 +152,16 @@ export default function Sidebar({
       {/* Connected Tools Modal */}
       <AnimatePresence>
         {showToolsModal && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 cursor-pointer"
+            onClick={() => setShowToolsModal(false)}
+          >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-lg cyber-glass-strong rounded-2xl p-6 border border-[rgba(53,230,255,0.2)] shadow-[0_0_40px_rgba(0,0,0,0.8)]"
+              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="w-full max-w-lg cyber-glass-strong rounded-2xl p-6 border border-[rgba(53,230,255,0.2)] shadow-[0_0_40px_rgba(0,0,0,0.8)] cursor-default"
             >
               <div className="flex items-center justify-between pb-4 border-b border-[var(--line)]">
                 <div className="flex items-center gap-2">
@@ -165,14 +169,16 @@ export default function Sidebar({
                   <h3 className="font-semibold text-lg text-white">Connected Tools</h3>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setShowToolsModal(false)}
-                  className="p-1 rounded-lg text-[var(--muted)] hover:text-white"
+                  className="p-1.5 rounded-lg text-[var(--muted)] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  aria-label="Close modal"
                 >
                   ✕
                 </button>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto pr-1">
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto pr-1">
                 {[
                   { name: 'Calendar Sync', desc: 'Google / Apple Calendar scheduling', icon: '📅', status: 'Online' },
                   { name: 'Smart Home Hub', desc: 'Lights, HVAC, appliances automation', icon: '🏠', status: 'Active' },
@@ -200,8 +206,9 @@ export default function Sidebar({
 
               <div className="mt-5 flex justify-end">
                 <button
+                  type="button"
                   onClick={() => setShowToolsModal(false)}
-                  className="px-4 py-2 text-xs font-medium text-white rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 cursor-pointer"
+                  className="px-5 py-2 text-xs font-semibold text-white rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 cursor-pointer transition-all shadow-[0_0_15px_rgba(53,230,255,0.15)]"
                 >
                   Done
                 </button>
@@ -214,12 +221,16 @@ export default function Sidebar({
       {/* Automations Modal */}
       <AnimatePresence>
         {showAutomationsModal && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 cursor-pointer"
+            onClick={() => setShowAutomationsModal(false)}
+          >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-lg cyber-glass-strong rounded-2xl p-6 border border-[rgba(146,108,255,0.25)] shadow-[0_0_40px_rgba(0,0,0,0.8)]"
+              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="w-full max-w-lg cyber-glass-strong rounded-2xl p-6 border border-[rgba(146,108,255,0.25)] shadow-[0_0_40px_rgba(0,0,0,0.8)] cursor-default"
             >
               <div className="flex items-center justify-between pb-4 border-b border-[var(--line)]">
                 <div className="flex items-center gap-2">
@@ -227,8 +238,10 @@ export default function Sidebar({
                   <h3 className="font-semibold text-lg text-white">Automations & Scenes</h3>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setShowAutomationsModal(false)}
-                  className="p-1 rounded-lg text-[var(--muted)] hover:text-white"
+                  className="p-1.5 rounded-lg text-[var(--muted)] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  aria-label="Close modal"
                 >
                   ✕
                 </button>
@@ -256,8 +269,9 @@ export default function Sidebar({
 
               <div className="mt-5 flex justify-end">
                 <button
+                  type="button"
                   onClick={() => setShowAutomationsModal(false)}
-                  className="px-4 py-2 text-xs font-medium text-white rounded-lg bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/40 cursor-pointer"
+                  className="px-5 py-2 text-xs font-semibold text-white rounded-lg bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/40 cursor-pointer transition-all shadow-[0_0_15px_rgba(146,108,255,0.15)]"
                 >
                   Done
                 </button>

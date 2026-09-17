@@ -71,9 +71,9 @@ function ToolCard({
     >
       {/* Shimmer progress bar at top */}
       {isExecuting && (
-        <div className="h-0.5 w-full bg-gradient-to-r from-neon-cyan/0 via-neon-purple to-neon-cyan/0 shimmer" />
+        <div className="h-0.5 w-full bg-gradient-to-r from-[rgba(53,230,255,0)] via-[var(--violet)] to-[rgba(53,230,255,0)] shimmer-bar" />
       )}
-      {isCompleted && <div className="h-0.5 w-full bg-neon-green/60" />}
+      {isCompleted && <div className="h-0.5 w-full bg-[var(--lime)]" />}
 
       <div className="p-3.5">
         {/* Header */}
