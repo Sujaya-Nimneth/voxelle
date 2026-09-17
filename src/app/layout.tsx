@@ -1,36 +1,38 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Manrope, DM_Mono } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
+const manrope = Manrope({
+  variable: "--font-manrope",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
   display: "swap",
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains-mono",
+const dmMono = DM_Mono({
+  variable: "--font-dm-mono",
   subsets: ["latin"],
+  weight: ["400", "500"],
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Voxelle — Voice-Enabled Multimodal Assistant",
+  title: "Voxelle — Ambient Voice AI & Command Center",
   description:
-    "A sleek, voice-powered AI assistant with multimodal capabilities. Schedule events, control smart home devices, and analyze images — all by voice.",
+    "A cyber dark, voice-enabled multimodal AI assistant and workspace command center. Schedule events, coordinate connected tools, and interact by voice.",
   keywords: [
     "voice assistant",
     "AI",
+    "command center",
     "multimodal",
     "speech recognition",
-    "smart home",
-    "calendar",
+    "cyber dark",
   ],
   authors: [{ name: "Voxelle" }],
   openGraph: {
-    title: "Voxelle — Voice-Enabled Multimodal Assistant",
+    title: "Voxelle — Ambient Voice AI & Command Center",
     description:
-      "A sleek, voice-powered AI assistant with multimodal capabilities.",
+      "A sleek, cyber dark ambient AI assistant and command center.",
     type: "website",
   },
 };
@@ -43,9 +45,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${manrope.variable} ${dmMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans selection:bg-cyan-500/20 selection:text-cyan-200">
+        {children}
+      </body>
     </html>
   );
 }
+
