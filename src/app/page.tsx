@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useCallback, KeyboardEvent } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useAssistant } from '@/hooks/useAssistant';
-import MicButton from '@/components/MicButton';
+import Sidebar from '@/components/Sidebar';
+import ActivityRail from '@/components/ActivityRail';
 import ChatLog from '@/components/ChatLog';
 import ImageDropzone from '@/components/ImageDropzone';
-import ToolPanel from '@/components/ToolPanel';
 import StatusBadge from '@/components/StatusBadge';
 import PermissionWarning from '@/components/PermissionWarning';
 
@@ -15,6 +15,8 @@ export default function Home() {
     status,
     messages,
     toolEvents,
+    sessionEvents,
+    recentSignals,
     uploadedImage,
     setUploadedImage,
     sttError,
@@ -30,14 +32,17 @@ export default function Home() {
   const [textInput, setTextInput] = useState('');
   const [showWarning, setShowWarning] = useState(true);
   const [showDropzone, setShowDropzone] = useState(false);
-  const [showToolPanel, setShowToolPanel] = useState(true);
+  const [activeNav, setActiveNav] = useState<'command' | 'automations' | 'tools'>('command');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isMobileRailOpen, setIsMobileRailOpen] = useState(false);
 
   const handleSend = useCallback(() => {
-    if (textInput.trim()) {
+    if (textInput.trim() || uploadedImage) {
       sendTextMessage(textInput);
       setTextInput('');
+      setShowDropzone(false);
     }
-  }, [textInput, sendTextMessage]);
+  }, [textInput, uploadedImage, sendTextMessage]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
@@ -53,233 +58,214 @@ export default function Home() {
     showWarning && (!!sttError || !sttSupported || !ttsSupported);
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-background">
-      {/* ─── Header ─── */}
-      <header className="flex items-center justify-between px-4 sm:px-6 py-3 glass-strong border-b border-surface-border z-20">
-        <div className="flex items-center gap-3">
-          {/* Logo */}
-          <motion.div
-            className="flex items-center gap-2"
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-          >
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-neon-cyan/80 to-neon-purple/80 flex items-center justify-center">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="white"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" x2="12" y1="19" y2="22" />
-              </svg>
-            </div>
-            <h1 className="text-base font-semibold tracking-tight">
-              Voxelle
-            </h1>
-          </motion.div>
-        </div>
+    <div className="min-h-screen relative overflow-hidden cyber-bg selection:bg-cyan-500/20 selection:text-cyan-200">
+      {/* Background Cyber Grid */}
+      <div className="cyber-grid" />
 
-        <div className="flex items-center gap-2 sm:gap-3">
-          <StatusBadge status={status} />
-
-          {/* Tool panel toggle (mobile) */}
-          <button
-            onClick={() => setShowToolPanel((v) => !v)}
-            className={`p-2 rounded-lg transition-colors cursor-pointer lg:hidden ${
-              showToolPanel ? 'bg-neon-purple/15 text-neon-purple' : 'text-muted hover:text-foreground hover:bg-white/5'
-            }`}
-            aria-label="Toggle tool panel"
-            title="Toggle tool panel"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-            </svg>
-          </button>
-
-          {/* Clear history */}
-          <button
-            onClick={clearHistory}
-            className="p-2 rounded-lg text-muted hover:text-foreground hover:bg-white/5 transition-colors cursor-pointer"
-            aria-label="Clear chat history"
-            title="Clear history"
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M3 6h18" />
-              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-            </svg>
-          </button>
-        </div>
-      </header>
-
-      {/* ─── Permission Warning ─── */}
-      {hasWarning && (
-        <PermissionWarning
-          error={sttError}
-          sttSupported={sttSupported}
-          ttsSupported={ttsSupported}
-          onDismiss={() => setShowWarning(false)}
+      {/* 3-Column Cyber Shell */}
+      <div className="cyber-shell min-h-screen">
+        {/* ─── Left Sidebar (262px) ─── */}
+        <Sidebar
+          recentSignals={recentSignals}
+          onSelectSignal={(signal) => {
+            sendTextMessage(signal);
+          }}
+          onNewConversation={clearHistory}
+          activeNav={activeNav}
+          setActiveNav={setActiveNav}
+          isOpenMobile={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
         />
-      )}
 
-      {/* ─── Main Content ─── */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left: Chat Area */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Chat Log */}
+        {/* ─── Center Command Center ─── */}
+        <main className="flex flex-col min-w-0 h-screen overflow-hidden">
+          {/* Header (82px) */}
+          <header className="h-[82px] px-6 sm:px-8 flex items-center justify-between border-b border-[var(--line)] flex-shrink-0 z-20 bg-[rgba(8,11,20,0.6)] backdrop-blur-md">
+            <div className="flex items-center gap-3">
+              {/* Mobile Sidebar Toggle */}
+              <button
+                onClick={() => setIsMobileSidebarOpen(true)}
+                className="lg:hidden p-2 rounded-lg text-[var(--muted)] hover:text-white hover:bg-white/5 cursor-pointer"
+                aria-label="Open workspace menu"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </svg>
+              </button>
+
+              <div className="font-mono text-[11px] tracking-[0.4px] text-[#75849e]">
+                WORKSPACE / <b className="font-medium text-[#c9daf1]">COMMAND CENTER</b>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <StatusBadge status={status} />
+
+              {/* Clear conversation action */}
+              <button
+                onClick={clearHistory}
+                className="hidden sm:flex items-center gap-1.5 p-2 rounded-lg text-[var(--muted)] hover:text-white hover:bg-white/5 transition-colors text-xs font-mono cursor-pointer"
+                title="Reset session"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 6h18" />
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                </svg>
+              </button>
+
+              {/* Mobile Activity Rail Toggle */}
+              <button
+                onClick={() => setIsMobileRailOpen(true)}
+                className="lg:hidden p-2 rounded-lg text-[var(--muted)] hover:text-white hover:bg-white/5 font-mono text-[10px] flex items-center gap-1.5 cursor-pointer border border-[var(--line)]"
+                aria-label="Open activity rail"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--lime)] glow-lime" />
+                <span>LOG</span>
+              </button>
+            </div>
+          </header>
+
+          {/* Permission / Capability Warning */}
+          {hasWarning && (
+            <PermissionWarning
+              error={sttError}
+              sttSupported={sttSupported}
+              ttsSupported={ttsSupported}
+              onDismiss={() => setShowWarning(false)}
+            />
+          )}
+
+          {/* Conversation Log View */}
           <ChatLog
             messages={messages}
             isProcessing={status === 'processing'}
+            onSelectSuggestion={(text) => {
+              sendTextMessage(text);
+            }}
+            onStartVoice={toggleListening}
           />
 
-          {/* Bottom Controls */}
-          <div className="flex-shrink-0 pb-4 pt-2 px-2 space-y-3 border-t border-surface-border/50 glass-strong">
-            {/* Image Dropzone (collapsible) */}
-            <div className="flex items-center justify-between px-4 pt-1">
+          {/* Floating Composer Container */}
+          <div className="flex-shrink-0 px-4 sm:px-8 pb-7 pt-2">
+            {/* Optional Image Dropzone */}
+            <AnimatePresence>
+              {showDropzone && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, height: 0 }}
+                  animate={{ opacity: 1, y: 0, height: 'auto' }}
+                  exit={{ opacity: 0, y: 10, height: 0 }}
+                  className="mb-2.5 max-w-[760px] mx-auto"
+                >
+                  <ImageDropzone
+                    uploadedImage={uploadedImage}
+                    onImageUpload={setUploadedImage}
+                    onImageRemove={() => setUploadedImage(null)}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Cyber Composer Bar */}
+            <div className="max-w-[760px] mx-auto border border-[rgba(133,156,191,0.2)] bg-[rgba(14,20,34,0.85)] backdrop-blur-xl shadow-[0_18px_50px_rgba(0,0,0,0.36)] rounded-[16px] p-[9px] flex items-center gap-[9px]">
+              {/* Attach Image Button */}
               <button
                 onClick={() => setShowDropzone((v) => !v)}
-                className="flex items-center gap-1.5 text-xs text-muted hover:text-muted-light transition-colors cursor-pointer"
+                className={`w-[39px] h-[39px] rounded-[10px] flex items-center justify-center transition-all cursor-pointer text-[17px] flex-shrink-0 ${
+                  uploadedImage
+                    ? 'bg-cyan-500/20 text-[var(--cyan)] border border-cyan-500/40 shadow-[0_0_12px_rgba(53,230,255,0.2)]'
+                    : showDropzone
+                    ? 'bg-white/10 text-white'
+                    : 'text-[#8190a8] hover:text-white hover:bg-white/[0.04]'
+                }`}
+                title="Attach image for multimodal analysis"
+                aria-label="Attach visual signal"
               >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-                  <circle cx="9" cy="9" r="2" />
-                  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                </svg>
-                {showDropzone ? 'Hide image upload' : 'Attach image'}
-                {uploadedImage && (
-                  <span className="inline-block w-2 h-2 rounded-full bg-neon-cyan" />
-                )}
+                ＋
               </button>
 
+              {/* Text Input */}
+              <input
+                id="text-input"
+                type="text"
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={
+                  status === 'processing'
+                    ? 'Processing signal...'
+                    : status === 'listening'
+                    ? 'Listening to your voice...'
+                    : 'Message Voxelle…'
+                }
+                disabled={status === 'processing'}
+                className="flex-1 bg-transparent border-none outline-none text-[13px] text-[#edf5ff] placeholder:text-[#687992] px-2 font-sans"
+              />
+
+              {/* Stop Speaking Button if TTS active */}
               {status === 'speaking' && (
                 <button
                   onClick={stopSpeaking}
-                  className="flex items-center gap-1 text-xs text-neon-purple hover:text-neon-purple/80 transition-colors cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-lg text-[11px] font-mono text-[var(--violet)] bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0"
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                    <rect x="6" y="6" width="12" height="12" rx="2" />
-                  </svg>
-                  Stop speaking
+                  <span>■</span>
+                  <span className="hidden sm:inline">Mute</span>
                 </button>
               )}
-            </div>
 
-            {showDropzone && (
-              <ImageDropzone
-                uploadedImage={uploadedImage}
-                onImageUpload={setUploadedImage}
-                onImageRemove={() => setUploadedImage(null)}
-              />
-            )}
-
-            {/* Mic + Text Input Row */}
-            <div className="flex items-center gap-3 px-2 sm:px-4">
-              <div className="flex-1">
-                <div className="glass rounded-xl flex items-center px-4 py-2 gap-2 focus-within:ring-1 focus-within:ring-neon-cyan/30 transition-all">
-                  <input
-                    id="text-input"
-                    type="text"
-                    value={textInput}
-                    onChange={(e) => setTextInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder={
-                      status === 'processing'
-                        ? 'Thinking...'
-                        : 'Type a message...'
-                    }
-                    disabled={status === 'processing'}
-                    className="flex-1 bg-transparent border-none outline-none text-sm text-foreground placeholder:text-muted disabled:opacity-50"
-                  />
-                  <button
-                    onClick={handleSend}
-                    disabled={!textInput.trim() || status === 'processing'}
-                    className="p-1.5 rounded-lg text-neon-cyan hover:bg-neon-cyan/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                    aria-label="Send message"
+              {/* Mic Button: Cyber Dark ring with pulse */}
+              <button
+                id="mic-button"
+                onClick={toggleListening}
+                disabled={!sttSupported || status === 'processing'}
+                className={`w-[40px] h-[40px] rounded-full border transition-all flex items-center justify-center cursor-pointer flex-shrink-0 relative ${
+                  status === 'listening'
+                    ? 'border-[var(--cyan)] bg-[rgba(53,230,255,0.25)] text-white shadow-[0_0_22px_var(--cyan)]'
+                    : status === 'speaking'
+                    ? 'border-[var(--violet)] bg-[rgba(146,108,255,0.2)] text-[var(--violet)] shadow-[0_0_18px_rgba(146,108,255,0.3)]'
+                    : 'border-[rgba(53,230,255,0.6)] bg-[rgba(39,176,208,0.12)] text-[var(--cyan)] shadow-[0_0_17px_rgba(53,230,255,0.12)] hover:bg-[rgba(39,176,208,0.24)]'
+                }`}
+                title={status === 'listening' ? 'Stop listening' : 'Start voice input'}
+                aria-label="Voice input"
+              >
+                {status === 'listening' ? (
+                  <motion.span
+                    animate={{ scale: [1, 1.3, 1] }}
+                    transition={{ duration: 1, repeat: Infinity }}
+                    className="text-[15px]"
                   >
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <line x1="22" x2="11" y1="2" y2="13" />
-                      <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
+                    ●
+                  </motion.span>
+                ) : (
+                  <span className="text-[17px] font-medium leading-none">♩</span>
+                )}
+              </button>
 
-              <MicButton
-                status={status}
-                onToggle={toggleListening}
-                disabled={!sttSupported}
-              />
+              {/* Send Button */}
+              <button
+                onClick={handleSend}
+                disabled={(!textInput.trim() && !uploadedImage) || status === 'processing'}
+                className="w-[40px] h-[40px] rounded-[10px] bg-gradient-to-br from-[var(--cyan)] to-[#6e85ff] text-[#06111d] font-extrabold text-[16px] flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-90 hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex-shrink-0 shadow-[0_0_15px_rgba(53,230,255,0.25)]"
+                aria-label="Send message"
+              >
+                ↗
+              </button>
             </div>
           </div>
-        </div>
+        </main>
 
-        {/* Right: Tool Panel */}
-        <motion.aside
-          className={`border-l border-surface-border glass-strong overflow-hidden
-            ${showToolPanel ? 'block' : 'hidden'}
-            w-full lg:w-72 xl:w-80
-            fixed lg:relative bottom-0 left-0 right-0 lg:bottom-auto lg:left-auto lg:right-auto
-            h-[40vh] lg:h-auto
-            z-30 lg:z-auto
-          `}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-        >
-          <div className="flex items-center justify-between px-4 py-3 border-b border-surface-border/50">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-light">
-              Tools
-            </h2>
-            <span className="text-[10px] font-mono text-muted">
-              {toolEvents.length > 0
-                ? `${toolEvents.length} active`
-                : 'Idle'}
-            </span>
-          </div>
-          <ToolPanel toolEvents={toolEvents} onDismiss={dismissToolEvent} />
-        </motion.aside>
-      </div>
-
-      {/* Mobile tool panel overlay backdrop */}
-      {showToolPanel && (
-        <div
-          className="fixed inset-0 bg-black/40 z-20 lg:hidden"
-          onClick={() => setShowToolPanel(false)}
+        {/* ─── Right Activity Rail (316px) ─── */}
+        <ActivityRail
+          status={status}
+          sessionEvents={sessionEvents}
+          toolEvents={toolEvents}
+          onDismissToolEvent={dismissToolEvent}
+          isOpenMobile={isMobileRailOpen}
+          onCloseMobile={() => setIsMobileRailOpen(false)}
         />
-      )}
+      </div>
     </div>
   );
 }

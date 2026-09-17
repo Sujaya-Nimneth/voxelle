@@ -9,27 +9,35 @@ interface StatusBadgeProps {
 
 const statusConfig: Record<
   AssistantStatus,
-  { label: string; color: string; bgColor: string }
+  { label: string; dotColor: string; textColor: string; borderColor: string; bgColor: string }
 > = {
   idle: {
-    label: 'Ready',
-    color: '#64748b',
-    bgColor: 'rgba(100, 116, 139, 0.15)',
+    label: 'SYSTEM READY',
+    dotColor: 'var(--lime)',
+    textColor: '#c7ed9d',
+    borderColor: 'rgba(181, 245, 111, 0.19)',
+    bgColor: 'rgba(181, 245, 111, 0.06)',
   },
   listening: {
-    label: 'Listening',
-    color: '#00e5ff',
-    bgColor: 'rgba(0, 229, 255, 0.12)',
+    label: 'LISTENING',
+    dotColor: 'var(--cyan)',
+    textColor: '#c9faff',
+    borderColor: 'rgba(53, 230, 255, 0.35)',
+    bgColor: 'rgba(53, 230, 255, 0.08)',
   },
   processing: {
-    label: 'Processing',
-    color: '#a855f7',
-    bgColor: 'rgba(168, 85, 247, 0.12)',
+    label: 'THINKING',
+    dotColor: 'var(--violet)',
+    textColor: '#e4d6ff',
+    borderColor: 'rgba(146, 108, 255, 0.35)',
+    bgColor: 'rgba(146, 108, 255, 0.08)',
   },
   speaking: {
-    label: 'Speaking',
-    color: '#a855f7',
-    bgColor: 'rgba(168, 85, 247, 0.12)',
+    label: 'SPEAKING',
+    dotColor: 'var(--violet)',
+    textColor: '#e4d6ff',
+    borderColor: 'rgba(146, 108, 255, 0.35)',
+    bgColor: 'rgba(146, 108, 255, 0.08)',
   },
 };
 
@@ -39,34 +47,34 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
   return (
     <motion.div
       layout
-      className="flex items-center gap-2 px-3 py-1.5 rounded-full"
-      style={{ backgroundColor: config.bgColor }}
-      animate={{ backgroundColor: config.bgColor }}
-      transition={{ duration: 0.3 }}
+      className="flex items-center gap-[9px] py-[8px] px-[11px] rounded-[20px] font-mono text-[10px] font-medium tracking-[0.7px] transition-colors"
+      style={{
+        backgroundColor: config.bgColor,
+        border: `1px solid ${config.borderColor}`,
+        color: config.textColor,
+      }}
     >
-      <motion.div
-        className="w-2 h-2 rounded-full"
-        style={{ backgroundColor: config.color }}
+      <motion.i
+        className="w-[6px] h-[6px] rounded-full not-italic block"
+        style={{
+          backgroundColor: config.dotColor,
+          boxShadow: `0 0 9px ${config.dotColor}`,
+        }}
         animate={
           status !== 'idle'
             ? {
-                scale: [1, 1.3, 1],
+                scale: [1, 1.4, 1],
                 opacity: [0.7, 1, 0.7],
               }
-            : { scale: 1, opacity: 0.7 }
+            : { scale: 1, opacity: 1 }
         }
         transition={
           status !== 'idle'
-            ? { duration: 1.2, repeat: Infinity }
+            ? { duration: 1, repeat: Infinity }
             : { duration: 0.3 }
         }
       />
-      <span
-        className="text-[11px] font-mono uppercase tracking-wider font-medium"
-        style={{ color: config.color }}
-      >
-        {config.label}
-      </span>
+      <span>{config.label}</span>
     </motion.div>
   );
 }
