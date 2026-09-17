@@ -26,6 +26,14 @@ export interface ToolEvent {
   timestamp: number;
 }
 
+export interface SessionEvent {
+  id: string;
+  title: string;
+  subtitle: string;
+  timestamp: number;
+  status?: 'normal' | 'warn' | 'success';
+}
+
 export interface ChatRequest {
   messages: Message[];
   image?: string; // base64

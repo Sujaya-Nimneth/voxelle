@@ -1,6 +1,6 @@
 import { ToolCall } from '@/types/types';
 
-// ─── Tool Definitions (compatible with Gemini function calling format) ───
+// ─── Tool Definitions (compatible with Gemini & OpenAI function calling formats) ───
 
 export const toolDefinitions = [
   {
@@ -8,19 +8,19 @@ export const toolDefinitions = [
     description:
       'Adds a new event to the user\'s calendar. Use this when the user asks to schedule, book, or add a meeting, appointment, reminder, or any calendar event.',
     parameters: {
-      type: 'object',
+      type: 'OBJECT',
       properties: {
         title: {
-          type: 'string',
+          type: 'STRING',
           description: 'The title or name of the event',
         },
         time: {
-          type: 'string',
-          description: 'The time of the event (e.g. "3:00 PM", "14:30")',
+          type: 'STRING',
+          description: 'The time of the event (e.g. "3:00 PM", "14:30", "2:00 PM")',
         },
         date: {
-          type: 'string',
-          description: 'The date of the event (e.g. "2024-12-25", "tomorrow", "next Monday")',
+          type: 'STRING',
+          description: 'The date of the event (e.g. "today", "tomorrow", "this afternoon", "2026-09-18")',
         },
       },
       required: ['title', 'time', 'date'],
@@ -31,14 +31,14 @@ export const toolDefinitions = [
     description:
       'Turns a smart home device on or off. Use this when the user asks to control, turn on, turn off, enable, or disable a home device like lights, thermostat, fan, TV, etc.',
     parameters: {
-      type: 'object',
+      type: 'OBJECT',
       properties: {
         device_name: {
-          type: 'string',
-          description: 'The name of the device to control (e.g. "living room lights", "thermostat", "bedroom fan")',
+          type: 'STRING',
+          description: 'The name of the device to control (e.g. "living room lights", "thermostat", "studio focus lights")',
         },
         state: {
-          type: 'string',
+          type: 'STRING',
           enum: ['on', 'off'],
           description: 'Whether to turn the device on or off',
         },
@@ -54,14 +54,14 @@ export function executeToolCall(toolCall: ToolCall): string {
   switch (toolCall.name) {
     case 'add_calendar_event': {
       const { title, time, date } = toolCall.arguments;
-      return `✅ Event "${title}" has been scheduled for ${date} at ${time}.`;
+      return `Scheduled "${title}" for ${date} at ${time}.`;
     }
     case 'toggle_smart_home_device': {
       const { device_name, state } = toolCall.arguments;
-      return `✅ ${device_name} has been turned ${state}.`;
+      return `${device_name} has been set to ${state}.`;
     }
     default:
-      return `⚠️ Unknown tool: ${toolCall.name}`;
+      return `Executed ${toolCall.name}`;
   }
 }
 
@@ -75,12 +75,74 @@ interface MockScenario {
 
 const mockScenarios: MockScenario[] = [
   {
-    keywords: ['schedule', 'meeting', 'appointment', 'book', 'calendar', 'remind'],
-    response: 'I\'ve scheduled that for you. The event has been added to your calendar.',
+    keywords: ['plan my afternoon', 'afternoon', 'plan afternoon'],
+    response: 'I\'ve organized your afternoon. I blocked out 90 minutes of dedicated focus time and lined up your high-priority items.',
     toolCall: {
       name: 'add_calendar_event',
       arguments: {
-        title: 'Team Meeting',
+        title: 'Deep Work: Core Architecture',
+        time: '2:00 PM',
+        date: 'This afternoon',
+      },
+    },
+  },
+  {
+    keywords: ['brief me on today', 'brief me', 'today briefing', 'morning brief'],
+    response: 'Good morning! All 8 workspace integrations are synced. You have 2 calendar events scheduled, no pending system alerts, and your smart workspace is running on optimal settings.',
+    toolCall: {
+      name: 'add_calendar_event',
+      arguments: {
+        title: 'Workspace Review Sync',
+        time: '11:00 AM',
+        date: 'Today',
+      },
+    },
+  },
+  {
+    keywords: ['prepare for a meeting', 'meeting prep', 'prepare meeting'],
+    response: 'I\'ve prepared your briefing pack for the upcoming meeting and allocated a 15-minute preparation window on your schedule.',
+    toolCall: {
+      name: 'add_calendar_event',
+      arguments: {
+        title: 'Meeting Preparation Window',
+        time: '3:45 PM',
+        date: 'Today',
+      },
+    },
+  },
+  {
+    keywords: ['focus routine', 'focus mode'],
+    response: 'Focus routine initiated. Studio lights have been dialed to cyber focus tint and notifications are silenced.',
+    toolCall: {
+      name: 'toggle_smart_home_device',
+      arguments: {
+        device_name: 'Studio Focus Lights',
+        state: 'on',
+      },
+    },
+  },
+  {
+    keywords: ['evening scene', 'evening', 'night mode'],
+    response: 'Evening scene enabled. Ambient mood lighting engaged and climate set to comfortable evening levels.',
+    toolCall: {
+      name: 'toggle_smart_home_device',
+      arguments: {
+        device_name: 'Living Room Ambient Lights',
+        state: 'on',
+      },
+    },
+  },
+  {
+    keywords: ['timesfm', 'research briefing: timesfm'],
+    response: 'TimesFM (Time-Series Foundation Model) by Google Research is a pretrained decoder-only foundation model engineered for zero-shot time-series forecasting. It delivers state-of-the-art predictive accuracy across enterprise and scientific domains.',
+  },
+  {
+    keywords: ['schedule', 'meeting', 'appointment', 'book', 'calendar', 'remind'],
+    response: 'I\'ve scheduled that for you. The event has been confirmed and synced to your calendar.',
+    toolCall: {
+      name: 'add_calendar_event',
+      arguments: {
+        title: 'Project Synchronization',
         time: '3:00 PM',
         date: 'Tomorrow',
       },
@@ -88,7 +150,7 @@ const mockScenarios: MockScenario[] = [
   },
   {
     keywords: ['light', 'lights', 'lamp'],
-    response: 'Done! I\'ve toggled the lights for you.',
+    response: 'Done! I\'ve adjusted the lighting for your workspace.',
     toolCall: {
       name: 'toggle_smart_home_device',
       arguments: {
@@ -99,22 +161,11 @@ const mockScenarios: MockScenario[] = [
   },
   {
     keywords: ['fan', 'ac', 'air conditioner', 'thermostat', 'temperature', 'heater'],
-    response: 'I\'ve adjusted your climate control. Let me know if you need anything else.',
+    response: 'Climate control updated. Setting temperature to 71°F.',
     toolCall: {
       name: 'toggle_smart_home_device',
       arguments: {
-        device_name: 'Thermostat',
-        state: 'on',
-      },
-    },
-  },
-  {
-    keywords: ['tv', 'television', 'screen'],
-    response: 'Your TV is now toggled. Enjoy!',
-    toolCall: {
-      name: 'toggle_smart_home_device',
-      arguments: {
-        device_name: 'Living Room TV',
+        device_name: 'Workspace Thermostat',
         state: 'on',
       },
     },
@@ -122,20 +173,18 @@ const mockScenarios: MockScenario[] = [
 ];
 
 const genericResponses = [
-  "I'm Voxelle, your multimodal AI assistant. I can help you schedule events, control smart home devices, and analyze images. What would you like to do?",
-  "That's an interesting thought! While I'm running in demo mode, I can show you how I handle calendar scheduling and smart home controls. Try asking me to schedule a meeting or turn on the lights!",
-  "I'd be happy to help with that. In my full configuration with a Gemini API key, I can provide much more detailed responses. For now, try asking me to control a smart device or add a calendar event!",
-  "Great question! I'm currently running without an API key, so I'm giving demo responses. You can add a GEMINI_API_KEY in your .env.local to unlock full AI capabilities, including image analysis!",
-  "Hello! I'm Voxelle, your voice-enabled assistant. Try saying something like 'Schedule a meeting tomorrow at 3pm' or 'Turn on the living room lights' to see me in action!",
+  "I'm Voxelle, your ambient AI co-pilot. I can coordinate calendar events, automations, smart devices, and multimodal image analysis. What would you like to put in motion?",
+  "Workspace connected and ready. Try asking me to plan your afternoon, brief you on today, or toggle your connected tools.",
+  "Understood. All workspace telemetry is active and encrypted. You can interact by typing or tapping the voice microphone.",
+  "I'm monitoring your workspace signals. Let me know if you'd like to schedule events or adjust your connected environment.",
 ];
 
 export function getMockResponse(userMessage: string): {
   response: string;
   toolCalls?: ToolCall[];
 } {
-  const lowerMessage = userMessage.toLowerCase();
+  const lowerMessage = userMessage.toLowerCase().trim();
 
-  // Check for keyword matches
   for (const scenario of mockScenarios) {
     if (scenario.keywords.some((kw) => lowerMessage.includes(kw))) {
       const toolCalls: ToolCall[] | undefined = scenario.toolCall
@@ -155,7 +204,6 @@ export function getMockResponse(userMessage: string): {
     }
   }
 
-  // Return a random generic response
   const randomIndex = Math.floor(Math.random() * genericResponses.length);
   return { response: genericResponses[randomIndex] };
 }

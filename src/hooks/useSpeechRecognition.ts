@@ -60,6 +60,7 @@ interface UseSpeechRecognitionReturn {
   isListening: boolean;
   startListening: () => void;
   stopListening: () => void;
+  clearTranscript: () => void;
   error: string | null;
   isSupported: boolean;
 }
@@ -172,11 +173,16 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     setIsListening(false);
   }, []);
 
+  const clearTranscript = useCallback(() => {
+    setTranscript('');
+  }, []);
+
   return {
     transcript,
     isListening,
     startListening,
     stopListening,
+    clearTranscript,
     error,
     isSupported,
   };
