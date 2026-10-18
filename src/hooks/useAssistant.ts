@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useSpeechRecognition } from './useSpeechRecognition';
 import { useSpeechSynthesis } from './useSpeechSynthesis';
+import { optimizeImage } from '@/lib/imageUtils';
 import type {
   AssistantStatus,
   Message,
@@ -14,6 +15,7 @@ import type {
 
 const STORAGE_KEY = 'voxelle_chat_history';
 const SIGNALS_KEY = 'voxelle_recent_signals';
+const AUTOSPEAK_KEY = 'voxelle_auto_speak';
 
 const DEFAULT_SIGNALS = [
   "Plan tomorrow's schedule",
@@ -31,10 +33,11 @@ function loadMessagesFromStorage(): Message[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      return JSON.parse(stored);
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch {
-    // Ignore parse errors
+    // Ignore storage parse errors
   }
   return [];
 }
@@ -42,9 +45,16 @@ function loadMessagesFromStorage(): Message[] {
 function saveMessages(messages: Message[]) {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
-  } catch {
-    // Ignore storage errors
+    // Strip heavy base64 image strings from persistent storage to prevent 5MB localStorage quota crash
+    const sanitized = messages.slice(-50).map((m) => {
+      if (m.image && m.image.length > 500) {
+        return { ...m, image: undefined };
+      }
+      return m;
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
+  } catch (err) {
+    console.warn('Could not persist messages to localStorage:', err);
   }
 }
 
@@ -103,19 +113,55 @@ export function useAssistant() {
   const [hydrated, setHydrated] = useState(false);
   const [recentSignals, setRecentSignals] = useState<string[]>(DEFAULT_SIGNALS);
   const [sessionEvents, setSessionEvents] = useState<SessionEvent[]>(INITIAL_SESSION_EVENTS);
+  const [autoSpeak, setAutoSpeak] = useState(true);
+  const [activeProvider, setActiveProvider] = useState<string>('mock');
+  const [isDegraded, setIsDegraded] = useState(false);
 
   const statusRef = useRef<AssistantStatus>('idle');
-  const processingRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const isNetworkBusyRef = useRef(false);
 
-  // Hydrate from localStorage on initial client mount
+  // Hook integrations
+  const {
+    transcript,
+    interimTranscript,
+    isListening,
+    startListening,
+    stopListening,
+    clearTranscript,
+    error: sttError,
+    isSupported: sttSupported,
+    audioFrequencyLevels,
+  } = useSpeechRecognition();
+
+  const {
+    speak,
+    stop: stopSpeaking,
+    isSpeaking,
+    isSupported: ttsSupported,
+    voices,
+    settings: ttsSettings,
+    updateSettings: updateTtsSettings,
+  } = useSpeechSynthesis();
+
+  // Hydrate from localStorage on client mount
   useEffect(() => {
     const stored = loadMessagesFromStorage();
     if (stored.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate from external localStorage store
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate from external storage
       setMessages(stored);
     }
     const signals = loadSignalsFromStorage();
     setRecentSignals(signals);
+
+    try {
+      const storedAutoSpeak = localStorage.getItem(AUTOSPEAK_KEY);
+      if (storedAutoSpeak !== null) {
+        setAutoSpeak(storedAutoSpeak === 'true');
+      }
+    } catch {
+      // Ignore
+    }
 
     const now = Date.now();
     setSessionEvents([
@@ -145,43 +191,37 @@ export function useAssistant() {
     setHydrated(true);
   }, []);
 
-  // Keep statusRef in sync
+  // Sync statusRef
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
 
-  // Persist messages
+  // Persist messages & auto-speak setting
   useEffect(() => {
     if (hydrated) {
       saveMessages(messages);
     }
   }, [messages, hydrated]);
 
-  // Persist recent signals
   useEffect(() => {
     if (hydrated) {
       saveSignals(recentSignals);
     }
   }, [recentSignals, hydrated]);
 
-  const {
-    transcript,
-    isListening,
-    startListening,
-    stopListening,
-    clearTranscript,
-    error: sttError,
-    isSupported: sttSupported,
-  } = useSpeechRecognition();
+  const toggleAutoSpeak = useCallback(() => {
+    setAutoSpeak((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(AUTOSPEAK_KEY, String(next));
+      } catch {
+        // Ignore
+      }
+      return next;
+    });
+  }, []);
 
-  const {
-    speak,
-    stop: stopSpeaking,
-    isSpeaking,
-    isSupported: ttsSupported,
-  } = useSpeechSynthesis();
-
-  // Helper to add session log events
+  // Helper to add session telemetry
   const addSessionEvent = useCallback(
     (title: string, subtitle: string, eventStatus: 'normal' | 'warn' | 'success' = 'normal') => {
       setSessionEvents((prev) => [
@@ -192,13 +232,12 @@ export function useAssistant() {
           timestamp: Date.now(),
           status: eventStatus,
         },
-        ...prev.slice(0, 7),
+        ...prev.slice(0, 6),
       ]);
     },
     []
   );
 
-  // Add a prompt to recent signals
   const recordSignal = useCallback((text: string) => {
     const trimmed = text.trim();
     if (!trimmed || trimmed.length > 40) return;
@@ -208,11 +247,31 @@ export function useAssistant() {
     });
   }, []);
 
-  // Process message pipeline
+  // Handle image upload with auto-downscaling
+  const handleSetUploadedImage = useCallback(async (image: string | null) => {
+    if (!image) {
+      setUploadedImage(null);
+      return;
+    }
+    const optimized = await optimizeImage(image);
+    setUploadedImage(optimized);
+  }, []);
+
+  // Process message pipeline with interruptibility and cancellation
   const processMessage = useCallback(
     async (userText: string, image?: string | null) => {
-      if (processingRef.current) return;
-      processingRef.current = true;
+      // Abort any ongoing request before dispatching a new one
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+
+      // Stop any speech immediately upon new input
+      stopSpeaking();
+      isNetworkBusyRef.current = true;
+
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      const timeoutId = setTimeout(() => controller.abort(), 35000); // 35s timeout
 
       recordSignal(userText);
 
@@ -228,30 +287,46 @@ export function useAssistant() {
       setStatus('processing');
 
       addSessionEvent(
-        `Signal dispatched: "${userText.slice(0, 24)}${userText.length > 24 ? '...' : ''}"`,
+        `Signal dispatched: "${userText.slice(0, 22)}${userText.length > 22 ? '...' : ''}"`,
         'TRANSIT · TLS 1.3',
         'normal'
       );
 
       try {
-        const recentMessages = [...messages, userMessage].slice(-10);
+        // Prepare messages for API: strip old base64 images from conversation history
+        const historyForApi = [...messages, userMessage]
+          .slice(-10)
+          .filter((m) => m.role === 'user' || m.role === 'assistant')
+          .map((m, idx, arr) => {
+            if (idx < arr.length - 1 && m.image) {
+              return { ...m, image: undefined };
+            }
+            return m;
+          });
 
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            messages: recentMessages,
+            messages: historyForApi,
             image: image || undefined,
           }),
+          signal: controller.signal,
         });
 
+        clearTimeout(timeoutId);
+
         if (!res.ok) {
-          throw new Error(`API error: ${res.status}`);
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `HTTP ${res.status}`);
         }
 
         const data: ChatResponse = await res.json();
 
-        // Handle tool calls
+        if (data.provider) setActiveProvider(data.provider);
+        if (data.degraded !== undefined) setIsDegraded(data.degraded);
+
+        // Tool execution animations
         if (data.toolCalls && data.toolCalls.length > 0) {
           for (const tc of data.toolCalls) {
             const toolEvent: ToolEvent = {
@@ -267,8 +342,8 @@ export function useAssistant() {
               'warn'
             );
 
-            // Simulate realistic tool action latency
-            await new Promise((resolve) => setTimeout(resolve, 1200));
+            // Realistic micro-delay for visual feedback
+            await new Promise((resolve) => setTimeout(resolve, 800));
 
             setToolEvents((prev) =>
               prev.map((te) =>
@@ -290,7 +365,7 @@ export function useAssistant() {
           }
         }
 
-        // Add assistant message
+        // Add assistant reply
         const assistantMessage: Message = {
           id: generateId(),
           role: 'assistant',
@@ -303,40 +378,59 @@ export function useAssistant() {
           setUploadedImage(null);
         }
 
-        // Speak response
-        if (ttsSupported && data.response) {
+        isNetworkBusyRef.current = false;
+
+        // Voice playback if autoSpeak is enabled and TTS is supported
+        if (autoSpeak && ttsSupported && data.response) {
           setStatus('speaking');
           addSessionEvent('Voice response active', 'SYNTHESIS ENGINE ENGAGED', 'normal');
           speak(data.response, () => {
             setStatus('idle');
-            processingRef.current = false;
             addSessionEvent('Workspace nominal', 'AWAITING YOUR NEXT SIGNAL', 'warn');
           });
         } else {
           setStatus('idle');
-          processingRef.current = false;
           addSessionEvent('Workspace nominal', 'AWAITING YOUR NEXT SIGNAL', 'warn');
         }
-      } catch (err) {
+      } catch (err: unknown) {
+        clearTimeout(timeoutId);
+        isNetworkBusyRef.current = false;
+
+        if (err instanceof Error && err.name === 'AbortError') {
+          console.warn('Assistant request was cancelled.');
+          setStatus('idle');
+          return;
+        }
+
         console.error('Assistant pipeline error:', err);
         const errorMessage: Message = {
           id: generateId(),
           role: 'system',
-          content: 'An error occurred while communicating with the assistant. Please retry.',
+          content:
+            err instanceof Error && err.message
+              ? `Error: ${err.message}. Tap to retry.`
+              : 'An error occurred while communicating with the assistant. Please retry.',
           timestamp: Date.now(),
         };
         setMessages((prev) => [...prev, errorMessage]);
         setStatus('idle');
-        processingRef.current = false;
         addSessionEvent('Signal interrupted', 'RETRY AVAILABLE', 'warn');
       }
     },
-    [messages, speak, ttsSupported, addSessionEvent, recordSignal]
+    [messages, autoSpeak, ttsSupported, speak, stopSpeaking, addSessionEvent, recordSignal]
   );
+
+  // Retry the last user prompt if failed
+  const retryLastMessage = useCallback(() => {
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+    if (lastUser) {
+      processMessage(lastUser.content, lastUser.image);
+    }
+  }, [messages, processMessage]);
 
   // Watch speech recognition transcript
   useEffect(() => {
-    if (transcript && !processingRef.current) {
+    if (transcript && !isNetworkBusyRef.current) {
       const textToProcess = transcript;
       clearTranscript();
       processMessage(textToProcess, uploadedImage);
@@ -364,7 +458,8 @@ export function useAssistant() {
     if (isListening) {
       stopListening();
       addSessionEvent('Listening paused', 'INPUT SURFACE CLOSED', 'normal');
-    } else if (statusRef.current === 'idle') {
+    } else {
+      // If Voxelle is speaking or idle, start listening immediately (interrupting speech)
       stopSpeaking();
       startListening();
     }
@@ -372,7 +467,7 @@ export function useAssistant() {
 
   const sendTextMessage = useCallback(
     (text: string) => {
-      if (!text.trim() || processingRef.current) return;
+      if (!text.trim() || isNetworkBusyRef.current) return;
       stopSpeaking();
       processMessage(text.trim(), uploadedImage);
     },
@@ -380,13 +475,18 @@ export function useAssistant() {
   );
 
   const clearHistory = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    stopSpeaking();
+    stopListening();
     setMessages([]);
     setToolEvents([]);
     if (typeof window !== 'undefined') {
       localStorage.removeItem(STORAGE_KEY);
     }
     addSessionEvent('Session log reset', 'COMMAND CENTER READY', 'normal');
-  }, [addSessionEvent]);
+  }, [stopSpeaking, stopListening, addSessionEvent]);
 
   const dismissToolEvent = useCallback((id: string) => {
     setToolEvents((prev) => prev.filter((te) => te.id !== id));
@@ -399,16 +499,26 @@ export function useAssistant() {
     sessionEvents,
     recentSignals,
     uploadedImage,
-    setUploadedImage,
+    setUploadedImage: handleSetUploadedImage,
     sttError,
     sttSupported,
     ttsSupported,
     isListening,
     toggleListening,
     sendTextMessage,
+    retryLastMessage,
     clearHistory,
     dismissToolEvent,
     stopSpeaking,
+    interimTranscript,
+    audioFrequencyLevels,
+    autoSpeak,
+    toggleAutoSpeak,
+    activeProvider,
+    isDegraded,
+    voices,
+    ttsSettings,
+    updateTtsSettings,
   };
 }
 
@@ -419,5 +529,5 @@ function getToolResult(tc: ToolCall): string {
   if (tc.name === 'toggle_smart_home_device') {
     return `${tc.arguments.device_name} turned ${tc.arguments.state}`;
   }
-  return 'Completed';
+  return 'Action completed successfully';
 }
