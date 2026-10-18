@@ -5,6 +5,8 @@ import type { AssistantStatus } from '@/types/types';
 
 interface StatusBadgeProps {
   status: AssistantStatus;
+  provider?: string;
+  isDegraded?: boolean;
 }
 
 const statusConfig: Record<
@@ -41,40 +43,49 @@ const statusConfig: Record<
   },
 };
 
-export default function StatusBadge({ status }: StatusBadgeProps) {
+export default function StatusBadge({ status, provider, isDegraded }: StatusBadgeProps) {
   const config = statusConfig[status];
 
   return (
-    <motion.div
-      layout
-      className="flex items-center gap-[9px] py-[8px] px-[11px] rounded-[20px] font-mono text-[10px] font-medium tracking-[0.7px] transition-colors"
-      style={{
-        backgroundColor: config.bgColor,
-        border: `1px solid ${config.borderColor}`,
-        color: config.textColor,
-      }}
-    >
-      <motion.i
-        className="w-[6px] h-[6px] rounded-full not-italic block"
+    <div className="flex items-center gap-2">
+      {provider && provider !== 'mock' && (
+        <span className="hidden md:inline-block font-mono text-[9px] uppercase px-2 py-0.5 rounded-full border border-white/10 text-[var(--muted)] bg-white/[0.02]">
+          {isDegraded ? `${provider} (fallback)` : provider}
+        </span>
+      )}
+
+      <div
+        className="flex items-center gap-[8px] py-[6px] px-[10px] rounded-[20px] font-mono text-[10px] font-medium tracking-[0.7px] transition-colors"
         style={{
-          backgroundColor: config.dotColor,
-          boxShadow: `0 0 9px ${config.dotColor}`,
+          backgroundColor: config.bgColor,
+          borderColor: config.borderColor,
+          borderWidth: 1,
+          borderStyle: 'solid',
+          color: config.textColor,
         }}
-        animate={
-          status !== 'idle'
-            ? {
-                scale: [1, 1.4, 1],
-                opacity: [0.7, 1, 0.7],
-              }
-            : { scale: 1, opacity: 1 }
-        }
-        transition={
-          status !== 'idle'
-            ? { duration: 1, repeat: Infinity }
-            : { duration: 0.3 }
-        }
-      />
-      <span>{config.label}</span>
-    </motion.div>
+      >
+        <motion.i
+          className="w-[6px] h-[6px] rounded-full not-italic block"
+          style={{
+            backgroundColor: config.dotColor,
+            boxShadow: `0 0 9px ${config.dotColor}`,
+          }}
+          animate={
+            status !== 'idle'
+              ? {
+                  scale: [1, 1.4, 1],
+                  opacity: [0.7, 1, 0.7],
+                }
+              : { scale: 1, opacity: 1 }
+            }
+          transition={
+            status !== 'idle'
+              ? { duration: 1, repeat: Infinity }
+              : { duration: 0.3 }
+          }
+        />
+        <span>{config.label}</span>
+      </div>
+    </div>
   );
 }

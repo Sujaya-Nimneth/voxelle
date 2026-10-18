@@ -1,6 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
+import { X, Calendar, Home, CheckCircle2, ShieldCheck } from 'lucide-react';
 import type { AssistantStatus, SessionEvent, ToolEvent } from '@/types/types';
 
 interface ActivityRailProps {
@@ -10,6 +11,7 @@ interface ActivityRailProps {
   onDismissToolEvent: (id: string) => void;
   isOpenMobile?: boolean;
   onCloseMobile?: () => void;
+  audioFrequencyLevels?: number[];
 }
 
 const BAR_BASE_HEIGHTS = [11, 21, 31, 16, 39, 25, 17, 29, 12, 20, 9];
@@ -21,6 +23,7 @@ export default function ActivityRail({
   onDismissToolEvent,
   isOpenMobile = false,
   onCloseMobile,
+  audioFrequencyLevels,
 }: ActivityRailProps) {
   const isListening = status === 'listening';
   const isSpeaking = status === 'speaking';
@@ -30,13 +33,13 @@ export default function ActivityRail({
   const getMeterStatusLabel = () => {
     switch (status) {
       case 'listening':
-        return 'LISTENING...';
+        return 'LIVE INPUT';
       case 'processing':
-        return 'PROCESSING...';
+        return 'THINKING';
       case 'speaking':
-        return 'SPEAKING...';
+        return 'SYNTHESIZING';
       default:
-        return 'VOICE READY';
+        return 'VOICE STANDBY';
     }
   };
 
@@ -53,7 +56,7 @@ export default function ActivityRail({
   };
 
   const railContent = (
-    <aside className="w-[316px] flex-shrink-0 flex flex-col justify-between h-full p-5 lg:py-7 lg:px-5 border-l border-[var(--line)] bg-[rgba(12,17,30,0.85)] backdrop-blur-2xl z-40 overflow-y-auto">
+    <aside className="w-[316px] flex-shrink-0 flex flex-col justify-between h-full p-5 lg:py-7 lg:px-5 border-l border-[var(--line)] bg-[rgba(12,17,30,0.88)] backdrop-blur-2xl z-40 overflow-y-auto">
       <div>
         {/* Rail Header */}
         <div className="flex items-center justify-between pb-1">
@@ -64,10 +67,10 @@ export default function ActivityRail({
             {onCloseMobile && (
               <button
                 onClick={onCloseMobile}
-                className="lg:hidden p-1 rounded text-[var(--muted)] hover:text-white"
+                className="lg:hidden p-1 rounded text-[var(--muted)] hover:text-white cursor-pointer"
                 aria-label="Close activity rail"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             )}
           </div>
@@ -77,66 +80,49 @@ export default function ActivityRail({
           </div>
         </div>
 
-        {/* Listening Surface Meter */}
+        {/* Listening Surface Reactive Audio Visualizer */}
         <div className="my-6 p-4 rounded-[13px] border border-[var(--line)] bg-white/[0.025]">
           <div className="flex justify-between items-center text-[11px] text-[#b8c5d7] mb-3.5">
             <span>Listening surface</span>
             <span
-              className="font-mono text-[10px] tracking-wider"
+              className="font-mono text-[10px] tracking-wider font-semibold"
               style={{ color: getMeterStatusColor() }}
             >
               {getMeterStatusLabel()}
             </span>
           </div>
 
-          <div className="h-[43px] flex items-center justify-between gap-[4px] px-1">
+          <div className="h-[44px] flex items-end justify-between gap-[4px] px-1 pb-1">
             {BAR_BASE_HEIGHTS.map((baseH, idx) => {
-              // Dynamic animation multipliers
-              const animDuration =
-                status === 'listening'
-                  ? 0.5 + (idx % 3) * 0.15
-                  : status === 'speaking'
-                  ? 0.7 + (idx % 4) * 0.12
-                  : status === 'processing'
-                  ? 1.0 + (idx % 2) * 0.2
-                  : 2.2;
+              // Real frequency level if microphone is live; otherwise responsive ambient wave
+              const realLevel = audioFrequencyLevels?.[idx];
+              let barHeight = baseH;
 
-              const targetHeight =
-                status === 'listening'
-                  ? [baseH * 0.5, Math.min(42, baseH * 1.5 + 10), baseH * 0.7, baseH]
-                  : status === 'speaking'
-                  ? [baseH * 0.8, Math.min(42, baseH * 1.4 + 6), baseH * 0.6, baseH]
-                  : status === 'processing'
-                  ? [baseH * 0.9, baseH * 1.2, baseH * 0.8]
-                  : [baseH, baseH * 1.1, baseH];
+              if (isListening && realLevel !== undefined) {
+                barHeight = Math.max(6, Math.min(42, Math.round(realLevel * 42)));
+              } else if (isSpeaking) {
+                barHeight = Math.max(8, (baseH * (1 + ((idx % 3) * 0.4))) % 40);
+              } else if (isProcessing) {
+                barHeight = Math.max(8, (baseH * 0.8));
+              }
 
               return (
-                <motion.i
+                <div
                   key={idx}
-                  className="w-[4px] rounded-[10px] not-italic block"
+                  className="w-[5px] rounded-full transition-all duration-100 ease-out"
                   style={{
+                    height: `${barHeight}px`,
                     background: 'linear-gradient(to top, var(--violet), var(--cyan))',
-                    opacity: isActive ? 0.95 : 0.65,
+                    opacity: isActive ? 0.95 : 0.5,
+                    boxShadow: isActive ? '0 0 8px rgba(53, 230, 255, 0.3)' : 'none',
                   }}
-                  animate={{
-                    height: targetHeight,
-                    opacity: isActive ? [0.8, 1, 0.8] : 0.6,
-                  }}
-                  transition={{
-                    duration: animDuration,
-                    repeat: Infinity,
-                    repeatType: 'mirror',
-                    delay: idx * 0.05,
-                    ease: 'easeInOut',
-                  }}
-                  initial={{ height: baseH }}
                 />
               );
             })}
           </div>
         </div>
 
-        {/* Tool Execution Cards (when active) */}
+        {/* Tool Execution Cards */}
         <AnimatePresence>
           {toolEvents.length > 0 && (
             <motion.div
@@ -158,23 +144,37 @@ export default function ActivityRail({
                   )}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-white">
-                      <span>{te.toolCall.name === 'add_calendar_event' ? '📅' : '🏠'}</span>
+                      {te.toolCall.name === 'add_calendar_event' ? (
+                        <Calendar className="w-3.5 h-3.5 text-[var(--cyan)]" />
+                      ) : (
+                        <Home className="w-3.5 h-3.5 text-[var(--violet)]" />
+                      )}
                       <span className="capitalize">
                         {te.toolCall.name.replace(/_/g, ' ')}
                       </span>
                     </div>
-                    {te.toolCall.status === 'completed' && (
+                    {te.toolCall.status === 'completed' ? (
                       <button
                         onClick={() => onDismissToolEvent(te.id)}
-                        className="text-[var(--muted)] hover:text-white text-xs cursor-pointer"
-                        aria-label="Dismiss"
+                        className="text-[var(--muted)] hover:text-white text-xs cursor-pointer p-0.5"
+                        aria-label="Dismiss tool result"
                       >
-                        ✕
+                        <X className="w-3.5 h-3.5" />
                       </button>
+                    ) : (
+                      <span className="w-2 h-2 rounded-full bg-[var(--cyan)] animate-ping" />
                     )}
                   </div>
-                  <p className="text-[11px] text-[#b8c5d7] mt-1 font-mono">
-                    {te.result || (te.toolCall.status === 'executing' ? 'Applying changes...' : 'Done')}
+                  <p className="text-[11px] text-[#b8c5d7] mt-1.5 font-mono flex items-center gap-1">
+                    {te.toolCall.status === 'completed' && (
+                      <CheckCircle2 className="w-3 h-3 text-[var(--lime)] flex-shrink-0" />
+                    )}
+                    <span>
+                      {te.result ||
+                        (te.toolCall.status === 'executing'
+                          ? 'Applying environmental change...'
+                          : 'Action completed')}
+                    </span>
                   </p>
                 </div>
               ))}
@@ -196,11 +196,11 @@ export default function ActivityRail({
               return (
                 <div
                   key={event.id}
-                  className="relative py-[11px] pr-[10px] pl-[26px] border-l border-[rgba(124,147,181,0.25)] text-[11px] text-[#c5d1e1] bg-gradient-to-r from-white/[0.035] to-transparent rounded-r-lg"
+                  className="relative py-[10px] pr-[10px] pl-[26px] border-l border-[rgba(124,147,181,0.25)] text-[11px] text-[#c5d1e1] bg-gradient-to-r from-white/[0.035] to-transparent rounded-r-lg"
                 >
                   {/* Status dot on the border line */}
                   <span
-                    className={`absolute -left-[4px] top-[15px] w-[7px] h-[7px] rounded-full ${
+                    className={`absolute -left-[4px] top-[14px] w-[7px] h-[7px] rounded-full ${
                       isWarn
                         ? 'bg-[#ffc561] shadow-[0_0_9px_#ffc561]'
                         : isSuccess
@@ -209,7 +209,7 @@ export default function ActivityRail({
                     }`}
                   />
                   <div className="leading-snug">{event.title}</div>
-                  <span className="block font-mono text-[9px] text-[#65758d] mt-1">
+                  <span className="block font-mono text-[9px] text-[#65758d] mt-0.5">
                     {event.subtitle}
                   </span>
                 </div>
@@ -219,10 +219,13 @@ export default function ActivityRail({
         </div>
       </div>
 
-      {/* Privacy Notice at bottom */}
-      <div className="mt-6 p-3 rounded-[10px] bg-[rgba(73,68,145,0.13)] border border-[rgba(146,108,255,0.18)] text-[10px] text-[#9b9abe] leading-relaxed">
-        <b className="text-[#d3c8ff] font-semibold block mb-0.5">Private by design.</b>
-        Voice is processed only while you&apos;re speaking.
+      {/* Security notice at bottom */}
+      <div className="mt-6 p-3 rounded-[10px] bg-[rgba(73,68,145,0.13)] border border-[rgba(146,108,255,0.18)] text-[10px] text-[#9b9abe] leading-relaxed flex items-start gap-2">
+        <ShieldCheck className="w-4 h-4 text-[var(--violet)] flex-shrink-0 mt-0.5" />
+        <div>
+          <b className="text-[#d3c8ff] font-semibold block mb-0.5">Private by design.</b>
+          Voice is processed only while you&apos;re actively speaking.
+        </div>
       </div>
     </aside>
   );

@@ -2,6 +2,24 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Plus,
+  Radio,
+  Sliders,
+  Cpu,
+  X,
+  Sparkles,
+  Settings,
+  Calendar,
+  Home,
+  Eye,
+  Volume2,
+  Mic,
+  Activity,
+  CheckCircle,
+} from 'lucide-react';
+import Modal from './Modal';
+import type { SpeechSettings } from '@/hooks/useSpeechSynthesis';
 
 interface SidebarProps {
   recentSignals: string[];
@@ -11,6 +29,12 @@ interface SidebarProps {
   setActiveNav: (nav: 'command' | 'automations' | 'tools') => void;
   isOpenMobile?: boolean;
   onCloseMobile?: () => void;
+  // Settings props
+  autoSpeak?: boolean;
+  onToggleAutoSpeak?: () => void;
+  voices?: SpeechSynthesisVoice[];
+  ttsSettings?: SpeechSettings;
+  onUpdateTtsSettings?: (settings: Partial<SpeechSettings>) => void;
 }
 
 export default function Sidebar({
@@ -21,28 +45,44 @@ export default function Sidebar({
   setActiveNav,
   isOpenMobile = false,
   onCloseMobile,
+  autoSpeak = true,
+  onToggleAutoSpeak,
+  voices = [],
+  ttsSettings,
+  onUpdateTtsSettings,
 }: SidebarProps) {
   const [showToolsModal, setShowToolsModal] = useState(false);
   const [showAutomationsModal, setShowAutomationsModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+  const handleCloseTools = () => {
+    setShowToolsModal(false);
+    setActiveNav('command');
+  };
+
+  const handleCloseAutomations = () => {
+    setShowAutomationsModal(false);
+    setActiveNav('command');
+  };
 
   const sidebarContent = (
-    <aside className="w-[262px] flex-shrink-0 flex flex-col justify-between h-full p-5 lg:py-7 lg:px-[18px] border-r border-[var(--line)] bg-[rgba(7,11,21,0.85)] backdrop-blur-2xl z-40">
+    <aside className="w-[262px] flex-shrink-0 flex flex-col justify-between h-full p-5 lg:py-7 lg:px-[18px] border-r border-[var(--line)] bg-[rgba(7,11,21,0.88)] backdrop-blur-2xl z-40">
       {/* Top Header & Brand */}
       <div>
         <div className="flex items-center justify-between px-2 mb-6">
-          <div className="flex items-center gap-3 font-extrabold tracking-tight text-[20px] text-white">
-            <div className="w-[35px] h-[35px] rounded-[11px] grid place-items-center text-[#07111b] font-bold text-[19px] glow-mark">
-              ⌁
+          <div className="flex items-center gap-2.5 font-extrabold tracking-tight text-[19px] text-white">
+            <div className="w-[34px] h-[34px] rounded-[10px] grid place-items-center text-[#07111b] glow-mark">
+              <Sparkles className="w-5 h-5 text-[#07111b] stroke-[2.5]" />
             </div>
             <span>VOXELLE</span>
           </div>
           {onCloseMobile && (
             <button
               onClick={onCloseMobile}
-              className="lg:hidden p-1.5 rounded-lg text-[var(--muted)] hover:text-white"
+              className="lg:hidden p-1.5 rounded-lg text-[var(--muted)] hover:text-white cursor-pointer"
               aria-label="Close sidebar"
             >
-              ✕
+              <X className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -50,9 +90,9 @@ export default function Sidebar({
         {/* New Conversation Button */}
         <button
           onClick={onNewConversation}
-          className="w-full border border-[rgba(53,230,255,0.38)] text-[#c9faff] bg-gradient-to-r from-[rgba(24,147,181,0.2)] to-[rgba(123,89,240,0.16)] hover:from-[rgba(24,147,181,0.35)] hover:to-[rgba(123,89,240,0.28)] transition-all rounded-[12px] py-[13px] px-[14px] mb-7 text-left font-semibold text-[13px] flex items-center cursor-pointer shadow-[0_0_15px_rgba(53,230,255,0.08)]"
+          className="w-full border border-[rgba(53,230,255,0.38)] text-[#c9faff] bg-gradient-to-r from-[rgba(24,147,181,0.2)] to-[rgba(123,89,240,0.16)] hover:from-[rgba(24,147,181,0.35)] hover:to-[rgba(123,89,240,0.28)] transition-all rounded-[12px] py-[12px] px-[14px] mb-7 text-left font-semibold text-[13px] flex items-center cursor-pointer shadow-[0_0_15px_rgba(53,230,255,0.08)] active:scale-[0.98]"
         >
-          <b className="text-[18px] mr-[9px] font-normal leading-none">＋</b>
+          <Plus className="w-4 h-4 mr-2.5 text-[var(--cyan)] stroke-[2.5]" />
           <span>New conversation</span>
         </button>
 
@@ -63,13 +103,13 @@ export default function Sidebar({
         <nav className="space-y-[2px]">
           <button
             onClick={() => setActiveNav('command')}
-            className={`w-full flex items-center gap-[11px] py-[11px] px-[10px] text-[13px] rounded-[9px] transition-all text-left cursor-pointer ${
+            className={`w-full flex items-center gap-[11px] py-[10px] px-[10px] text-[13px] rounded-[9px] transition-all text-left cursor-pointer ${
               activeNav === 'command'
-                ? 'text-[#edf8ff] bg-gradient-to-r from-[rgba(47,226,255,0.12)] to-[rgba(110,104,255,0.04)] border border-[rgba(77,218,255,0.13)] font-medium'
+                ? 'text-[#edf8ff] bg-gradient-to-r from-[rgba(47,226,255,0.12)] to-[rgba(110,104,255,0.04)] border border-[rgba(77,218,255,0.15)] font-medium shadow-[0_0_12px_rgba(47,226,255,0.05)]'
                 : 'text-[#9ba9c1] hover:text-white hover:bg-white/[0.03]'
             }`}
           >
-            <span className="w-[7px] h-[7px] rounded-full bg-[var(--cyan)] shadow-[0_0_10px_var(--cyan)] flex-shrink-0" />
+            <Radio className="w-4 h-4 text-[var(--cyan)] flex-shrink-0" />
             <span>Command center</span>
           </button>
 
@@ -78,13 +118,13 @@ export default function Sidebar({
               setActiveNav('automations');
               setShowAutomationsModal(true);
             }}
-            className={`w-full flex items-center gap-[11px] py-[11px] px-[10px] text-[13px] rounded-[9px] transition-all text-left cursor-pointer ${
+            className={`w-full flex items-center gap-[11px] py-[10px] px-[10px] text-[13px] rounded-[9px] transition-all text-left cursor-pointer ${
               activeNav === 'automations'
-                ? 'text-[#edf8ff] bg-gradient-to-r from-[rgba(47,226,255,0.12)] to-[rgba(110,104,255,0.04)] border border-[rgba(77,218,255,0.13)] font-medium'
+                ? 'text-[#edf8ff] bg-gradient-to-r from-[rgba(47,226,255,0.12)] to-[rgba(110,104,255,0.04)] border border-[rgba(77,218,255,0.15)] font-medium'
                 : 'text-[#9ba9c1] hover:text-white hover:bg-white/[0.03]'
             }`}
           >
-            <span className="text-[14px] text-[var(--violet)]">◈</span>
+            <Sliders className="w-4 h-4 text-[var(--violet)] flex-shrink-0" />
             <span>Automations</span>
           </button>
 
@@ -93,15 +133,15 @@ export default function Sidebar({
               setActiveNav('tools');
               setShowToolsModal(true);
             }}
-            className={`w-full flex items-center gap-[11px] py-[11px] px-[10px] text-[13px] rounded-[9px] transition-all text-left cursor-pointer ${
+            className={`w-full flex items-center gap-[11px] py-[10px] px-[10px] text-[13px] rounded-[9px] transition-all text-left cursor-pointer ${
               activeNav === 'tools'
-                ? 'text-[#edf8ff] bg-gradient-to-r from-[rgba(47,226,255,0.12)] to-[rgba(110,104,255,0.04)] border border-[rgba(77,218,255,0.13)] font-medium'
+                ? 'text-[#edf8ff] bg-gradient-to-r from-[rgba(47,226,255,0.12)] to-[rgba(110,104,255,0.04)] border border-[rgba(77,218,255,0.15)] font-medium'
                 : 'text-[#9ba9c1] hover:text-white hover:bg-white/[0.03]'
             }`}
           >
-            <span className="text-[13px] text-[var(--cyan)]">⌘</span>
+            <Cpu className="w-4 h-4 text-[var(--cyan)] flex-shrink-0" />
             <span>Connected tools</span>
-            <span className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-cyan-500/10 text-[var(--cyan)]">
+            <span className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-cyan-500/10 text-[var(--cyan)] border border-cyan-500/20">
               8
             </span>
           </button>
@@ -115,16 +155,12 @@ export default function Sidebar({
           <div className="space-y-[3px]">
             {recentSignals.map((signal, idx) => (
               <button
-                key={idx}
+                key={`${signal}-${idx}`}
                 onClick={() => {
                   onSelectSignal(signal);
                   if (onCloseMobile) onCloseMobile();
                 }}
-                className={`w-full text-left py-[9px] px-[10px] rounded-[8px] text-[12px] truncate transition-colors cursor-pointer ${
-                  idx === 0
-                    ? 'text-[#cbd7e8] bg-white/[0.04] hover:bg-white/[0.08]'
-                    : 'text-[#8796ae] hover:text-[#e0ebf8] hover:bg-white/[0.03]'
-                }`}
+                className="w-full text-left py-[9px] px-[10px] rounded-[8px] text-[12px] truncate transition-colors cursor-pointer text-[#8796ae] hover:text-[#e0ebf8] hover:bg-white/[0.04]"
                 title={signal}
               >
                 {signal}
@@ -134,152 +170,195 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* Bottom Profile Pill */}
-      <div className="p-3 flex items-center gap-[10px] border border-[var(--line)] bg-[rgba(19,27,43,0.72)] rounded-[12px] mt-6">
-        <div className="w-[29px] h-[29px] rounded-[9px] grid place-items-center bg-gradient-to-br from-[#f4c898] to-[#9d6bff] text-[#15111b] font-extrabold text-[12px] flex-shrink-0 shadow-[0_0_12px_rgba(157,107,255,0.25)]">
-          S
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-[12px] font-semibold text-white truncate">
-            Personal workspace
+      {/* Bottom Profile & Settings Pill */}
+      <div className="p-3 flex items-center justify-between border border-[var(--line)] bg-[rgba(19,27,43,0.72)] rounded-[12px] mt-6">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-[30px] h-[30px] rounded-[9px] grid place-items-center bg-gradient-to-br from-[#f4c898] to-[#9d6bff] text-[#15111b] font-extrabold text-[12px] flex-shrink-0 shadow-[0_0_12px_rgba(157,107,255,0.25)]">
+            V
           </div>
-          <span className="block text-[10px] text-[#73829c] font-mono truncate mt-[1px]">
-            Pro mode · 8 tools online
-          </span>
+          <div className="min-w-0">
+            <div className="text-[12px] font-semibold text-white truncate">
+              Personal workspace
+            </div>
+            <span className="block text-[10px] text-[#73829c] font-mono truncate">
+              Pro · 8 tools online
+            </span>
+          </div>
         </div>
+
+        <button
+          onClick={() => setShowSettingsModal(true)}
+          className="p-1.5 rounded-lg text-[#8796ae] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+          title="Assistant preferences"
+          aria-label="Assistant settings"
+        >
+          <Settings className="w-4 h-4" />
+        </button>
       </div>
 
-      {/* Connected Tools Modal */}
-      <AnimatePresence>
-        {showToolsModal && (
-          <div
-            className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 cursor-pointer"
-            onClick={() => setShowToolsModal(false)}
+      {/* Connected Tools Modal with Portal */}
+      <Modal
+        isOpen={showToolsModal}
+        onClose={handleCloseTools}
+        title="Connected Tools"
+        icon={<Cpu className="w-5 h-5 text-[var(--cyan)]" />}
+        footer={
+          <button
+            type="button"
+            onClick={handleCloseTools}
+            className="px-5 py-2 text-xs font-semibold text-white rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 cursor-pointer transition-all shadow-[0_0_15px_rgba(53,230,255,0.15)]"
           >
-            <motion.div
-              onClick={(e) => e.stopPropagation()}
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="w-full max-w-lg cyber-glass-strong rounded-2xl p-6 border border-[rgba(53,230,255,0.2)] shadow-[0_0_40px_rgba(0,0,0,0.8)] cursor-default"
-            >
-              <div className="flex items-center justify-between pb-4 border-b border-[var(--line)]">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full bg-[var(--cyan)] shadow-[0_0_10px_var(--cyan)]" />
-                  <h3 className="font-semibold text-lg text-white">Connected Tools</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowToolsModal(false)}
-                  className="p-1.5 rounded-lg text-[var(--muted)] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                  aria-label="Close modal"
-                >
-                  ✕
-                </button>
+            Done
+          </button>
+        }
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto pr-1">
+          {[
+            { name: 'Calendar Sync', desc: 'Google / Apple Calendar scheduling', icon: <Calendar className="w-4 h-4 text-cyan-400" />, status: 'Online' },
+            { name: 'Smart Home Hub', desc: 'Lights, HVAC, appliances automation', icon: <Home className="w-4 h-4 text-violet-400" />, status: 'Active' },
+            { name: 'Multimodal Vision', desc: 'Visual recognition & scene analysis', icon: <Eye className="w-4 h-4 text-lime-400" />, status: 'Ready' },
+            { name: 'Voice Synthesis', desc: 'Natural text-to-speech engine', icon: <Volume2 className="w-4 h-4 text-cyan-400" />, status: 'Active' },
+            { name: 'Speech Recognition', desc: 'Real-time low latency STT', icon: <Mic className="w-4 h-4 text-violet-400" />, status: 'Active' },
+            { name: 'Automations Engine', desc: 'Scheduled routines and triggers', icon: <Sliders className="w-4 h-4 text-lime-400" />, status: 'Online' },
+            { name: 'Session Memory', desc: 'Encrypted local state storage', icon: <CheckCircle className="w-4 h-4 text-cyan-400" />, status: 'Encrypted' },
+            { name: 'System Telemetry', desc: 'Live event stream & health check', icon: <Activity className="w-4 h-4 text-violet-400" />, status: 'Optimal' },
+          ].map((t, i) => (
+            <div key={i} className="p-3 rounded-xl bg-white/[0.02] border border-[var(--line)] flex flex-col justify-between">
+              <div className="flex items-start justify-between">
+                <span className="p-2 rounded-lg bg-white/5 border border-white/5">{t.icon}</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[rgba(181,245,111,0.1)] text-[var(--lime)] border border-lime-400/20">
+                  {t.status}
+                </span>
               </div>
-
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto pr-1">
-                {[
-                  { name: 'Calendar Sync', desc: 'Google / Apple Calendar scheduling', icon: '📅', status: 'Online' },
-                  { name: 'Smart Home Hub', desc: 'Lights, HVAC, appliances automation', icon: '🏠', status: 'Active' },
-                  { name: 'Multimodal Vision', desc: 'Visual recognition & scene analysis', icon: '👁️', status: 'Ready' },
-                  { name: 'Voice Synthesis', desc: 'Natural text-to-speech engine', icon: '🎙️', status: 'Active' },
-                  { name: 'Speech Recognition', desc: 'Real-time low latency STT', icon: '🎧', status: 'Active' },
-                  { name: 'Automations Engine', desc: 'Scheduled routines and triggers', icon: '⚙️', status: 'Online' },
-                  { name: 'Session Memory', desc: 'Encrypted local state storage', icon: '🔒', status: 'Encrypted' },
-                  { name: 'System Telemetry', desc: 'Live event stream & health check', icon: '⚡', status: 'Optimal' },
-                ].map((t, i) => (
-                  <div key={i} className="p-3 rounded-xl bg-white/[0.02] border border-[var(--line)] flex flex-col justify-between">
-                    <div className="flex items-start justify-between">
-                      <span className="text-xl">{t.icon}</span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[rgba(181,245,111,0.1)] text-[var(--lime)]">
-                        {t.status}
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      <div className="text-xs font-semibold text-white">{t.name}</div>
-                      <div className="text-[11px] text-[var(--muted)] mt-0.5">{t.desc}</div>
-                    </div>
-                  </div>
-                ))}
+              <div className="mt-3">
+                <div className="text-xs font-semibold text-white">{t.name}</div>
+                <div className="text-[11px] text-[var(--muted)] mt-0.5">{t.desc}</div>
               </div>
+            </div>
+          ))}
+        </div>
+      </Modal>
 
-              <div className="mt-5 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setShowToolsModal(false)}
-                  className="px-5 py-2 text-xs font-semibold text-white rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 cursor-pointer transition-all shadow-[0_0_15px_rgba(53,230,255,0.15)]"
-                >
-                  Done
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Automations Modal */}
-      <AnimatePresence>
-        {showAutomationsModal && (
-          <div
-            className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 cursor-pointer"
-            onClick={() => setShowAutomationsModal(false)}
+      {/* Automations Modal with Portal */}
+      <Modal
+        isOpen={showAutomationsModal}
+        onClose={handleCloseAutomations}
+        title="Automations & Scenes"
+        borderColor="rgba(146,108,255,0.3)"
+        icon={<Sliders className="w-5 h-5 text-[var(--violet)]" />}
+        footer={
+          <button
+            type="button"
+            onClick={handleCloseAutomations}
+            className="px-5 py-2 text-xs font-semibold text-white rounded-lg bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/40 cursor-pointer transition-all shadow-[0_0_15px_rgba(146,108,255,0.15)]"
           >
-            <motion.div
-              onClick={(e) => e.stopPropagation()}
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="w-full max-w-lg cyber-glass-strong rounded-2xl p-6 border border-[rgba(146,108,255,0.25)] shadow-[0_0_40px_rgba(0,0,0,0.8)] cursor-default"
+            Done
+          </button>
+        }
+      >
+        <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
+          {[
+            { title: 'Morning Workspace Sync', trigger: '08:30 AM Daily', desc: 'Turn on studio lights, briefing, unread review' },
+            { title: 'Focus Deep Work Routine', trigger: 'Voice keyword: "Focus mode"', desc: 'Dim peripheral lights, engage DND, start 90m block' },
+            { title: 'Evening Ambient Scene', trigger: 'Sunset / Voice', desc: 'Warm color temperature, adjust thermostat to 70°F' },
+            { title: 'Auto Calendar Buffer', trigger: 'Every event booking', desc: 'Reserve 10-minute prep buffer automatically' },
+          ].map((a, i) => (
+            <div key={i} className="p-3 rounded-xl bg-white/[0.02] border border-[var(--line)] flex items-center justify-between">
+              <div>
+                <div className="text-xs font-semibold text-white">{a.title}</div>
+                <div className="text-[11px] text-[var(--muted)] mt-0.5">{a.desc}</div>
+                <div className="text-[10px] font-mono text-[var(--violet)] mt-1">{a.trigger}</div>
+              </div>
+              <span className="text-[11px] font-mono text-[var(--lime)] px-2 py-1 rounded-full bg-lime-400/10 border border-lime-400/20">
+                Active
+              </span>
+            </div>
+          ))}
+        </div>
+      </Modal>
+
+      {/* Preferences / Settings Modal */}
+      <Modal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        title="Assistant Preferences"
+        icon={<Settings className="w-5 h-5 text-[var(--cyan)]" />}
+        footer={
+          <button
+            type="button"
+            onClick={() => setShowSettingsModal(false)}
+            className="px-5 py-2 text-xs font-semibold text-white rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 cursor-pointer transition-all shadow-[0_0_15px_rgba(53,230,255,0.15)]"
+          >
+            Save & Close
+          </button>
+        }
+      >
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1 text-xs text-[#cdd8e8]">
+          {/* Auto-Speak Toggle */}
+          <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-[var(--line)]">
+            <div>
+              <div className="font-semibold text-white">Spoken Audio Responses</div>
+              <div className="text-[11px] text-[var(--muted)] mt-0.5">
+                Automatically read assistant answers aloud using speech synthesis
+              </div>
+            </div>
+            <button
+              onClick={onToggleAutoSpeak}
+              className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
+                autoSpeak ? 'bg-[var(--cyan)]' : 'bg-white/10'
+              }`}
             >
-              <div className="flex items-center justify-between pb-4 border-b border-[var(--line)]">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full bg-[var(--violet)] shadow-[0_0_10px_var(--violet)]" />
-                  <h3 className="font-semibold text-lg text-white">Automations & Scenes</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowAutomationsModal(false)}
-                  className="p-1.5 rounded-lg text-[var(--muted)] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                  aria-label="Close modal"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="mt-4 space-y-2.5">
-                {[
-                  { title: 'Morning Workspace Sync', trigger: '08:30 AM Daily', desc: 'Turn on studio lights, briefing, unread review' },
-                  { title: 'Focus Deep Work Routine', trigger: 'Voice keyword: "Focus mode"', desc: 'Dim peripheral lights, engage DND, start 90m block' },
-                  { title: 'Evening Ambient Scene', trigger: 'Sunset / Voice', desc: 'Warm color temperature, adjust thermostat to 70°F' },
-                  { title: 'Auto Calendar Buffer', trigger: 'Every event booking', desc: 'Reserve 10-minute prep buffer automatically' },
-                ].map((a, i) => (
-                  <div key={i} className="p-3 rounded-xl bg-white/[0.02] border border-[var(--line)] flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-semibold text-white">{a.title}</div>
-                      <div className="text-[11px] text-[var(--muted)] mt-0.5">{a.desc}</div>
-                      <div className="text-[10px] font-mono text-[var(--violet)] mt-1">{a.trigger}</div>
-                    </div>
-                    <span className="text-[11px] font-mono text-[var(--lime)] px-2 py-1 rounded-full bg-lime-400/10">
-                      Active
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-5 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setShowAutomationsModal(false)}
-                  className="px-5 py-2 text-xs font-semibold text-white rounded-lg bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/40 cursor-pointer transition-all shadow-[0_0_15px_rgba(146,108,255,0.15)]"
-                >
-                  Done
-                </button>
-              </div>
-            </motion.div>
+              <span
+                className={`w-4 h-4 rounded-full bg-[#060810] block absolute top-1 transition-transform ${
+                  autoSpeak ? 'left-6' : 'left-1'
+                }`}
+              />
+            </button>
           </div>
-        )}
-      </AnimatePresence>
+
+          {/* Speech Rate Slider */}
+          {ttsSettings && onUpdateTtsSettings && (
+            <div className="p-3 rounded-xl bg-white/[0.02] border border-[var(--line)]">
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-semibold text-white">Speech Rate</span>
+                <span className="font-mono text-[11px] text-[var(--cyan)]">
+                  {ttsSettings.rate.toFixed(1)}x
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0.7"
+                max="1.5"
+                step="0.1"
+                value={ttsSettings.rate}
+                onChange={(e) => onUpdateTtsSettings({ rate: parseFloat(e.target.value) })}
+                className="w-full accent-[var(--cyan)] cursor-pointer"
+              />
+            </div>
+          )}
+
+          {/* Voice Engine Picker */}
+          {voices.length > 0 && ttsSettings && onUpdateTtsSettings && (
+            <div className="p-3 rounded-xl bg-white/[0.02] border border-[var(--line)]">
+              <div className="font-semibold text-white mb-2">Voice Engine</div>
+              <select
+                value={ttsSettings.voiceURI || ''}
+                onChange={(e) => onUpdateTtsSettings({ voiceURI: e.target.value })}
+                className="w-full bg-[rgba(8,11,20,0.8)] border border-[var(--line)] rounded-lg p-2 text-xs text-white outline-none cursor-pointer"
+              >
+                <option value="">Default (System Natural Voice)</option>
+                {voices
+                  .filter((v) => v.lang.startsWith('en'))
+                  .map((v) => (
+                    <option key={v.voiceURI} value={v.voiceURI}>
+                      {v.name} ({v.lang})
+                    </option>
+                  ))}
+              </select>
+            </div>
+          )}
+        </div>
+      </Modal>
     </aside>
   );
 

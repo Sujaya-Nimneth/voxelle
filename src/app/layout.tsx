@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Manrope, DM_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -15,6 +15,14 @@ const dmMono = DM_Mono({
   weight: ["400", "500"],
   display: "swap",
 });
+
+export const viewport: Viewport = {
+  themeColor: "#060810",
+  colorScheme: "dark",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+};
 
 export const metadata: Metadata = {
   title: "Voxelle — Ambient Voice AI & Command Center",
@@ -56,4 +64,3 @@ export default function RootLayout({
     </html>
   );
 }
-
