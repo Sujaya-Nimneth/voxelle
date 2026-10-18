@@ -1,19 +1,24 @@
-# 🌌 Voxelle — Multimodal Voice AI Assistant
+# 🌌 Voxelle — Multimodal Voice AI Assistant & Command Center
 
-Voxelle is a cutting-edge, voice-first multimodal AI assistant designed with a futuristic cyber-dark aesthetic. Built on the modern **Next.js 16 (App Router)** and **React 19**, Voxelle integrates state-of-the-art Web Speech technologies, advanced AI reasoning, and multi-provider LLM support. It features a stunning glassmorphic UI, responsive micro-animations, real-time function calling panels, and full multimodal vision capabilities.
+Voxelle is a voice-first multimodal AI assistant designed with a futuristic cyber-dark aesthetic. Built on **Next.js 16 (App Router)** and **React 19**, Voxelle integrates state-of-the-art Web Speech technologies, Web Audio frequency analysis, advanced LLM reasoning, multi-provider support, and function calling. It features a responsive 3-column cyber shell, portal-based telemetry modals, and full multimodal vision capabilities.
 
 ---
 
 ## ✨ Features at a Glance
 
 ### 🎙️ Speech-First Interactions
-*   **Intelligent Speech-to-Text (STT):** Fully integrated with the browser's Web Speech API for low-latency voice recognition. Hands-free input that auto-triggers assistant pipeline actions.
-*   **High-Fidelity Text-to-Speech (TTS):** Naturally speaks responses back using prioritized high-fidelity voices (Google Natural, Samantha, Daniel, or system-preferred English engines).
-*   **Manual Stop controls:** Instant mute or audio interruption controls to silence spoken feedback in a single tap.
+*   **Intelligent Speech-to-Text (STT):** Integrated with the browser's Web Speech API for low-latency voice recognition. Hands-free input that auto-triggers assistant pipeline actions.
+*   **Live Interim Speech Preview:** View live partial transcript bubbles with pulsing aura while speaking before the final command is dispatched.
+*   **High-Fidelity Text-to-Speech (TTS):** Naturally speaks responses back using prioritized high-fidelity voices (Google Natural, Samantha, Daniel, or user-selected voices).
+*   **Instant Interruption & Mute:** Tap the mic or type new text to instantly interrupt and silence speaking audio with zero UI lockup.
+
+### 📊 Reactive Audio Frequency Visualizer
+*   **Real Web Audio API AnalyserNode:** The Activity Rail meter connects directly to the user's microphone stream via an `AudioContext` and FFT frequency analyzer, dynamically responding to pitch and vocal intensity in real time.
+*   **Composited GPU Performance:** Visualizer bars use hardware-accelerated transforms to eliminate main-thread reflows.
 
 ### 🌐 Advanced Multi-LLM Provider Engine
-Equipped with a highly versatile server-side API router (`/api/chat`) that can be hot-swapped via environment variables:
-1.  **Google Gemini (Gemini 2.0 Flash):** Native support for multimodal vision input, advanced reasoning, and developer-defined tool function calling.
+Equipped with a secure server-side API router (`/api/chat`) that can be hot-swapped via environment variables:
+1.  **Google Gemini (Gemini 2.0 Flash):** Native support for multimodal vision input, advanced reasoning, and developer-defined tool function calling. Secured with `x-goog-api-key` header authorization.
 2.  **Groq (Llama-3.3-70b-versatile):** Ultra-low-latency response stream with function calling capability.
 3.  **Frictionless Demo Mode:** A standalone mock mode that works immediately **without any API keys**, enabling full simulated demonstrations of chatbot responses and smart home/calendar tool actions.
 
@@ -23,59 +28,40 @@ Voxelle doesn't just talk — it acts. Built with direct tool calling definition
 *   **🏠 Smart Home Device Controller (`toggle_smart_home_device`):** Toggles devices on or off (lights, AC units, fans, TVs, thermostats) with structured arguments.
 
 ### 🖼️ Multimodal Vision Integration
-*   **Interactive Drag & Drop:** Attach any image file via the custom React Dropzone overlay.
-*   **Visual Reasoning:** Gemini reads, analyzes, and answers questions about attached images, allowing you to ask, *"What's in this picture?"* or *"Can you write a caption for this?"*
+*   **Interactive Drag & Drop + Clipboard Paste:** Attach image files via the dropzone overlay or simply paste directly from your clipboard (`⌘V`).
+*   **Client-Side Auto-Optimization:** Automatically downscales high-resolution photos in-memory to prevent browser lockup or payload overflow.
+*   **Visual Reasoning:** Gemini reads, analyzes, and answers questions about attached images.
 
 ---
 
 ## 🎨 Design System & Aesthetics
 
-Voxelle features a high-fidelity visual layout inspired by cyberpunk interfaces. The application uses a custom-curated theme leveraging **Tailwind CSS v4** and **Framer Motion**:
+Voxelle features a high-fidelity visual layout inspired by cyberpunk interfaces:
 
-| Visual Feature | Description | Styling & Animations |
+| Visual Feature | Description | Styling & Performance |
 | :--- | :--- | :--- |
-| **Cyber-Dark Theme** | Deep cosmic background (`#06070d`) with neon accent highlights. | Harmonic HSL variables, custom selection glows |
-| **Glassmorphism** | Semi-transparent frosted panels that blend seamlessly. | CSS `backdrop-filter: blur(20px)` and subtle white borders |
-| **Responsive Mic Ripples** | Concentric neon waves pulsing outward in listening mode. | Framer Motion ripples with custom stagger delays |
-| **Thinking Orbitals** | Rotating purple dots that orbit the mic button when the AI is processing. | Continuous CSS and Motion keyframe rotations |
-| **Interactive Waveform** | Inner-button wave visualizers mapping distinct assistant states. | State-controlled SVG scaling (idle, listening, processing, speaking) |
-| **Real-time Tool Drawer** | Sidebar detailing executed tool definitions, arguments, and status. | Spring physics layout transitions with shimmer animations |
+| **Cyber Shell** | 3-Column responsive layout (Sidebar, Command Center, Activity Rail). | CSS Grid with dynamic `100dvh` mobile support |
+| **Lucide Iconography** | Crisp, lightweight, tree-shaken SVG icons across all controls. | `lucide-react` |
+| **Glassmorphism** | Semi-transparent frosted panels that blend into cosmic dark space. | CSS `backdrop-filter: blur(20px)` and subtle glowing borders |
+| **Portal Dialogs** | Connected Tools, Automations, and Preferences modals rendered via `createPortal`. | Accessible ARIA dialogs with focus trap and `Esc` dismissal |
+| **Smart Markdown** | Renders formatted bold text, inline code, and lists with cyber styling. | Custom lightweight parser without heavy dependencies |
+| **Smart Auto-Scroll** | Automatically sticks to bottom when active, but preserves reading position if scrolled up. | Native viewport detection with floating "Latest" jump pill |
 
 ---
 
-## 🛠️ Architecture & Tech Stack
+## 🛠️ Tech Stack
 
-```mermaid
-graph TD
-    User([User]) -->|Voice / Text| UI[Voxelle Web UI]
-    User -->|Drag & Drop| UI
-    UI -->|React Hooks| Hooks[useAssistant / useSpeechRecognition / useSpeechSynthesis]
-    Hooks -->|API POST Request| Router[Next.js API Route /api/chat]
-    Router -->|Check Environment| RouterConfig{Provider?}
-    RouterConfig -->|AI_PROVIDER=gemini| Gemini[Google AI Studio - Gemini 2.0 Flash]
-    RouterConfig -->|AI_PROVIDER=groq| Groq[Groq Cloud - Llama 3.3]
-    RouterConfig -->|AI_PROVIDER=mock| Mock[Mock / Demo Engine]
-    Gemini -->|Function Calls / Text| Response[API Response]
-    Groq -->|Function Calls / Text| Response
-    Mock -->|Simulated Tools / Text| Response
-    Response -->|Hydrate UI / Play TTS| UI
-```
-
-*   **Framework:** Next.js 16 (App Router, React 19)
-*   **Language:** TypeScript
+*   **Framework:** Next.js 16.4.2 (App Router, React 19)
+*   **Language:** TypeScript 5
 *   **Styling:** Tailwind CSS v4, custom CSS variables, `@tailwindcss/postcss`
-*   **Animations:** Framer Motion 12
-*   **Core Libraries:** `react-dropzone`
-*   **APIs:** Web Speech API (Recognition + Synthesis), Google Generative Language API, Groq Cloud API
+*   **Icons:** Lucide React
+*   **Motion:** Framer Motion 12
+*   **APIs:** Web Speech API, Web Audio API, Google Generative Language API, Groq Cloud API
+*   **Testing:** Native Node.js Test Runner (`node --test`)
 
 ---
 
 ## 🚀 Getting Started
-
-Follow these instructions to run a local instance of Voxelle.
-
-### 📋 Prerequisites
-*   Node.js 18+ or npm/pnpm/yarn.
 
 ### 1. Clone the Repository
 ```bash
@@ -89,51 +75,25 @@ npm install
 ```
 
 ### 3. Configure the Environment
-Create a `.env.local` file in the root directory. Configure your desired LLM provider (defaults to `mock` if none is configured):
-
-```env
-# Define the active provider ('gemini', 'groq', or 'mock')
-AI_PROVIDER=gemini
-
-# Add your API Keys as needed
-GEMINI_API_KEY=your_google_gemini_api_key_here
-GROQ_API_KEY=your_groq_api_key_here
+Copy `.env.example` to `.env.local`:
+```bash
+cp .env.example .env.local
 ```
 
-> [!TIP]
-> If you don't have an API key right now, simply set `AI_PROVIDER=mock`. The assistant will work immediately with pre-configured mock scenarios for calendar and smart home actions!
+Configure your preferred LLM provider (defaults to `mock` if none is configured):
+```env
+AI_PROVIDER=gemini
+GEMINI_API_KEY=your_gemini_key_here
+```
 
 ### 4. Run the Development Server
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser to interact with Voxelle.
+Open [http://localhost:3000](http://localhost:3000) with your browser.
 
----
-
-## 💡 Usage Examples
-
-To experience the AI's full capabilities and test the native tool execution:
-
-*   **Ask for smart home controls:** *"Hey Voxelle, turn off the living room lights."*
-    > ➔ You will see the **Smart Home tool card** populate in the side drawer, transition to a purple running status, and resolve with a green completed badge!
-*   **Ask to book a meeting:** *"Can you schedule a meeting tomorrow at 3:00 PM?"*
-    > ➔ The **Calendar tool card** will activate, extracting the title, time, and date parameters dynamically.
-*   **Attach an image:** Open the image uploader, drop in a picture, and type/speak: *"Explain what you see in this photo."*
-
----
-
-## ⚙️ Diagnostic Center & Browser Support
-
-Voxelle includes a built-in diagnostic warning system. If certain browser configurations or permissions are missing, an overlay banner will guide the user:
-
-*   **Microphone Access Denied:** Promptly warns users to authorize microphone permissions in browser settings.
-*   **Speech Recognition Support:** Recommends optimal browsers (Google Chrome, Microsoft Edge, Safari) if the user's browser lacks Web Speech compatibility.
-*   **Speech Synthesis Support:** Validates that native text-to-speech engines are available.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+### 5. Run Automated Tests
+```bash
+npm test
+```

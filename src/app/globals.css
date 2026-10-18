@@ -135,37 +135,6 @@ body {
   border: 1px solid var(--line);
 }
 
-/* Audio Meter Bar Animations */
-@keyframes bar-pulse-1 {
-  0%, 100% { height: 11px; }
-  50% { height: 28px; }
-}
-
-@keyframes bar-pulse-2 {
-  0%, 100% { height: 21px; }
-  50% { height: 38px; }
-}
-
-@keyframes bar-pulse-3 {
-  0%, 100% { height: 31px; }
-  50% { height: 16px; }
-}
-
-@keyframes bar-pulse-4 {
-  0%, 100% { height: 16px; }
-  50% { height: 42px; }
-}
-
-@keyframes bar-pulse-5 {
-  0%, 100% { height: 39px; }
-  50% { height: 20px; }
-}
-
-.bar-anim-1 { animation: bar-pulse-1 1s ease-in-out infinite; }
-.bar-anim-2 { animation: bar-pulse-2 0.8s ease-in-out infinite; }
-.bar-anim-3 { animation: bar-pulse-3 1.2s ease-in-out infinite; }
-.bar-anim-4 { animation: bar-pulse-4 0.9s ease-in-out infinite; }
-.bar-anim-5 { animation: bar-pulse-5 1.1s ease-in-out infinite; }
 
 /* Shimmer Progress */
 @keyframes shimmer-sweep {

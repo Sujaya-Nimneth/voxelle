@@ -1,4 +1,4 @@
-import { ToolCall } from '@/types/types';
+import type { ToolCall } from '../../../types/types';
 
 // ─── Tool Definitions (compatible with Gemini & OpenAI function calling formats) ───
 
