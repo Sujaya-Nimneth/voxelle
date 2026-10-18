@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useSyncExternalStore } from 'react';
 
 export interface SpeechSettings {
   rate: number;
@@ -25,23 +25,35 @@ const DEFAULT_SETTINGS: SpeechSettings = {
   volume: 1.0,
 };
 
+function emptySubscribe() {
+  return () => {};
+}
+
+function getTtsClientSnapshot(): boolean {
+  return typeof window !== 'undefined' && 'speechSynthesis' in window;
+}
+
+function getTtsServerSnapshot(): boolean {
+  return false;
+}
+
 export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isSupported, setIsSupported] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [settings, setSettings] = useState<SpeechSettings>(DEFAULT_SETTINGS);
+
+  const isSupported = useSyncExternalStore(
+    emptySubscribe,
+    getTtsClientSnapshot,
+    getTtsServerSnapshot
+  );
 
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const currentUtteranceIdRef = useRef<number>(0);
 
-  // Safely detect support and load voices on mount
+  // Load voices when available
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) {
-      setIsSupported(false);
-      return;
-    }
-
-    setIsSupported(true);
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
     const updateVoices = () => {
       const available = window.speechSynthesis.getVoices();
