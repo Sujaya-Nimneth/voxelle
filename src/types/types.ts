@@ -9,7 +9,7 @@ export interface Message {
 }
 
 export interface ToolCallArgs {
-  [key: string]: string;
+  [key: string]: string | number | boolean;
 }
 
 export interface ToolCall {
@@ -42,4 +42,6 @@ export interface ChatRequest {
 export interface ChatResponse {
   response: string;
   toolCalls?: ToolCall[];
+  provider?: string;
+  degraded?: boolean;
 }
