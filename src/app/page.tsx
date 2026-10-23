@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { Menu, Trash2, Activity } from 'lucide-react';
 import { useAssistant } from '@/hooks/useAssistant';
 import Sidebar from '@/components/Sidebar';
@@ -51,10 +52,19 @@ export default function Home() {
     (!warningDismissed || hasNewError) &&
     (!!sttError || !sttSupported || !ttsSupported);
 
-  const handleDismissWarning = () => {
+  const handleDismissWarning = useCallback(() => {
     setWarningDismissed(true);
     setDismissedError(sttError);
-  };
+  }, [sttError]);
+
+  // Stable handler identities so memoized Sidebar/ChatLog/ActivityRail don't
+  // re-render on every parent render.
+  const handleCloseSidebarMobile = useCallback(() => setIsMobileSidebarOpen(false), []);
+  const handleCloseRailMobile = useCallback(() => setIsMobileRailOpen(false), []);
+  const handleSpeakText = useCallback(
+    (text: string) => sendTextMessage(`Repeat: ${text}`),
+    [sendTextMessage]
+  );
 
   return (
     <div className="min-h-screen relative overflow-hidden cyber-bg selection:bg-cyan-500/20 selection:text-cyan-200">
@@ -66,14 +76,12 @@ export default function Home() {
         {/* ─── Left Sidebar (262px) ─── */}
         <Sidebar
           recentSignals={recentSignals}
-          onSelectSignal={(signal) => {
-            sendTextMessage(signal);
-          }}
+          onSelectSignal={sendTextMessage}
           onNewConversation={clearHistory}
           activeNav={activeNav}
           setActiveNav={setActiveNav}
           isOpenMobile={isMobileSidebarOpen}
-          onCloseMobile={() => setIsMobileSidebarOpen(false)}
+          onCloseMobile={handleCloseSidebarMobile}
           autoSpeak={autoSpeak}
           onToggleAutoSpeak={toggleAutoSpeak}
           voices={voices}
@@ -129,14 +137,16 @@ export default function Home() {
           </header>
 
           {/* Permission / Capability Warning */}
-          {hasWarning && (
-            <PermissionWarning
-              error={sttError}
-              sttSupported={sttSupported}
-              ttsSupported={ttsSupported}
-              onDismiss={handleDismissWarning}
-            />
-          )}
+          <AnimatePresence>
+            {hasWarning && (
+              <PermissionWarning
+                error={sttError}
+                sttSupported={sttSupported}
+                ttsSupported={ttsSupported}
+                onDismiss={handleDismissWarning}
+              />
+            )}
+          </AnimatePresence>
 
           {/* Conversation Log View */}
           <ChatLog
@@ -144,12 +154,10 @@ export default function Home() {
             isProcessing={status === 'processing'}
             isListening={isListening}
             interimTranscript={interimTranscript}
-            onSelectSuggestion={(text) => {
-              sendTextMessage(text);
-            }}
+            onSelectSuggestion={sendTextMessage}
             onStartVoice={toggleListening}
             onRetry={retryLastMessage}
-            onSpeakText={(text) => sendTextMessage(`Repeat: ${text}`)}
+            onSpeakText={handleSpeakText}
           />
 
           {/* Isolated Memoized Composer Container */}
@@ -171,7 +179,7 @@ export default function Home() {
           toolEvents={toolEvents}
           onDismissToolEvent={dismissToolEvent}
           isOpenMobile={isMobileRailOpen}
-          onCloseMobile={() => setIsMobileRailOpen(false)}
+          onCloseMobile={handleCloseRailMobile}
         />
       </div>
     </div>

@@ -51,6 +51,19 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const currentUtteranceIdRef = useRef<number>(0);
 
+  // Refs mirror voices/settings so `speak` keeps a stable identity: it sits in
+  // the dependency chain of processMessage -> sendTextMessage, and rebuilding
+  // that chain on every TTS settings slider tick needlessly re-renders the
+  // memoized composer.
+  const voicesRef = useRef(voices);
+  const settingsRef = useRef(settings);
+  useEffect(() => {
+    voicesRef.current = voices;
+  }, [voices]);
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
+
   // Load voices when available
   useEffect(() => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
@@ -104,11 +117,13 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
       utteranceRef.current = utterance;
 
       // Select voice: user preferred, then high quality natural voices, then English fallback
-      const availableVoices = voices.length > 0 ? voices : window.speechSynthesis.getVoices();
+      const currentSettings = settingsRef.current;
+      const availableVoices =
+        voicesRef.current.length > 0 ? voicesRef.current : window.speechSynthesis.getVoices();
       let chosenVoice: SpeechSynthesisVoice | undefined;
 
-      if (settings.voiceURI) {
-        chosenVoice = availableVoices.find((v) => v.voiceURI === settings.voiceURI);
+      if (currentSettings.voiceURI) {
+        chosenVoice = availableVoices.find((v) => v.voiceURI === currentSettings.voiceURI);
       }
 
       if (!chosenVoice) {
@@ -129,9 +144,9 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
         utterance.voice = chosenVoice;
       }
 
-      utterance.rate = settings.rate;
-      utterance.pitch = settings.pitch;
-      utterance.volume = settings.volume;
+      utterance.rate = currentSettings.rate;
+      utterance.pitch = currentSettings.pitch;
+      utterance.volume = currentSettings.volume;
 
       utterance.onstart = () => {
         if (currentUtteranceIdRef.current === utteranceId) {
@@ -166,7 +181,7 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
         }
       }
     },
-    [isSupported, voices, settings]
+    [isSupported]
   );
 
   const stop = useCallback(() => {

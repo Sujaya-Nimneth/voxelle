@@ -121,6 +121,14 @@ export function useAssistant() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const isNetworkBusyRef = useRef(false);
 
+  // Mirrors messages so processMessage can read the latest history without
+  // depending on the messages state array (which would churn its identity on
+  // every message and cascade through sendTextMessage into memoized children).
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
   // Hook integrations
   const {
     transcript,
@@ -293,7 +301,7 @@ export function useAssistant() {
 
       try {
         // Prepare messages for API: strip old base64 images from conversation history
-        const historyForApi = [...messages, userMessage]
+        const historyForApi = [...messagesRef.current, userMessage]
           .slice(-10)
           .filter((m) => m.role === 'user' || m.role === 'assistant')
           .map((m, idx, arr) => {
@@ -416,16 +424,16 @@ export function useAssistant() {
         addSessionEvent('Signal interrupted', 'RETRY AVAILABLE', 'warn');
       }
     },
-    [messages, autoSpeak, ttsSupported, speak, stopSpeaking, addSessionEvent, recordSignal]
+    [autoSpeak, ttsSupported, speak, stopSpeaking, addSessionEvent, recordSignal]
   );
 
   // Retry the last user prompt if failed
   const retryLastMessage = useCallback(() => {
-    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+    const lastUser = [...messagesRef.current].reverse().find((m) => m.role === 'user');
     if (lastUser) {
       processMessage(lastUser.content, lastUser.image);
     }
-  }, [messages, processMessage]);
+  }, [processMessage]);
 
   // Watch speech recognition transcript
   useEffect(() => {

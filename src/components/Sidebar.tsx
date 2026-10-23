@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -37,7 +37,7 @@ interface SidebarProps {
   onUpdateTtsSettings?: (settings: Partial<SpeechSettings>) => void;
 }
 
-export default function Sidebar({
+function Sidebar({
   recentSignals,
   onSelectSignal,
   onNewConversation,
@@ -395,3 +395,5 @@ export default function Sidebar({
     </>
   );
 }
+
+export default memo(Sidebar);

@@ -1,12 +1,12 @@
 'use client';
 
-import React from 'react';
+import { memo } from 'react';
 
 interface MarkdownMessageProps {
   content: string;
 }
 
-export default function MarkdownMessage({ content }: MarkdownMessageProps) {
+function MarkdownMessage({ content }: MarkdownMessageProps) {
   // Split into paragraphs / lines
   const lines = content.split('\n');
 
@@ -79,3 +79,7 @@ export default function MarkdownMessage({ content }: MarkdownMessageProps) {
     </div>
   );
 }
+
+// Memoized: message content is immutable once rendered, so re-renders of the
+// chat log (e.g. while a new reply streams in) skip re-parsing every message.
+export default memo(MarkdownMessage);

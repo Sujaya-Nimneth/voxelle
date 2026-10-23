@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Calendar, Home, CheckCircle2, ShieldCheck } from 'lucide-react';
 import AudioMeter from './AudioMeter';
@@ -14,7 +15,7 @@ interface ActivityRailProps {
   onCloseMobile?: () => void;
 }
 
-export default function ActivityRail({
+function ActivityRail({
   status,
   sessionEvents,
   toolEvents,
@@ -228,3 +229,5 @@ export default function ActivityRail({
     </>
   );
 }
+
+export default memo(ActivityRail);

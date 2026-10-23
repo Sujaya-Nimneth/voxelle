@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles,
@@ -34,7 +34,7 @@ const DEFAULT_SUGGESTIONS = [
   { icon: Briefcase, text: 'Prepare for a meeting' },
 ];
 
-export default function ChatLog({
+function ChatLog({
   messages,
   isProcessing,
   onSelectSuggestion,
@@ -363,3 +363,5 @@ export default function ChatLog({
     </div>
   );
 }
+
+export default memo(ChatLog);
