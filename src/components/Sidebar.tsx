@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, memo } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -37,6 +37,8 @@ interface SidebarProps {
   onUpdateTtsSettings?: (settings: Partial<SpeechSettings>) => void;
 }
 
+const SIDEBAR_WIDTH = 262;
+
 function Sidebar({
   recentSignals,
   onSelectSignal,
@@ -64,6 +66,22 @@ function Sidebar({
     setShowAutomationsModal(false);
     setActiveNav('command');
   };
+
+  // Mobile drawer behaves like a dialog: Escape closes it and the background
+  // stops scrolling while it's open.
+  useEffect(() => {
+    if (!isOpenMobile) return;
+    const handleKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') onCloseMobile?.();
+    };
+    window.addEventListener('keydown', handleKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', handleKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isOpenMobile, onCloseMobile]);
 
   const sidebarContent = (
     <aside className="w-[262px] flex-shrink-0 flex flex-col justify-between h-full p-5 lg:py-7 lg:px-[18px] border-r border-line bg-[rgba(7,11,21,0.88)] backdrop-blur-2xl z-40">
@@ -195,7 +213,15 @@ function Sidebar({
           <Settings className="w-4 h-4" />
         </button>
       </div>
+    </aside>
+  );
 
+  // Modals render once at the component top level: sidebarContent mounts in
+  // both the desktop rail and the mobile drawer, and Modal portals to
+  // document.body regardless of CSS display, so nesting the modals inside the
+  // duplicated content stacked two identical dialogs with duplicate ids.
+  const modals = (
+    <>
       {/* Connected Tools Modal with Portal */}
       <Modal
         isOpen={showToolsModal}
@@ -359,11 +385,13 @@ function Sidebar({
           )}
         </div>
       </Modal>
-    </aside>
+    </>
   );
 
   return (
     <>
+      {modals}
+
       {/* Desktop Sidebar */}
       <div className="hidden lg:block h-screen sticky top-0">
         {sidebarContent}
@@ -372,7 +400,7 @@ function Sidebar({
       {/* Mobile Sidebar Drawer */}
       <AnimatePresence>
         {isOpenMobile && (
-          <div className="fixed inset-0 z-50 lg:hidden flex">
+          <div className="fixed inset-0 z-50 lg:hidden flex" role="dialog" aria-modal="true" aria-label="Workspace menu">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -381,9 +409,9 @@ function Sidebar({
               onClick={onCloseMobile}
             />
             <motion.div
-              initial={{ x: -280 }}
+              initial={{ x: -SIDEBAR_WIDTH }}
               animate={{ x: 0 }}
-              exit={{ x: -280 }}
+              exit={{ x: -SIDEBAR_WIDTH }}
               transition={{ type: 'spring', damping: 25, stiffness: 250 }}
               className="relative z-10 h-full"
             >

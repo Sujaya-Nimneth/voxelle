@@ -1,6 +1,6 @@
 'use client';
 
-import { memo } from 'react';
+import { useEffect, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Calendar, Home, CheckCircle2, ShieldCheck } from 'lucide-react';
 import AudioMeter from './AudioMeter';
@@ -15,6 +15,8 @@ interface ActivityRailProps {
   onCloseMobile?: () => void;
 }
 
+const RAIL_WIDTH = 316;
+
 function ActivityRail({
   status,
   sessionEvents,
@@ -23,6 +25,22 @@ function ActivityRail({
   isOpenMobile = false,
   onCloseMobile,
 }: ActivityRailProps) {
+  // Mobile drawer behaves like a dialog: Escape closes it and the background
+  // stops scrolling while it's open.
+  useEffect(() => {
+    if (!isOpenMobile) return;
+    const handleKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') onCloseMobile?.();
+    };
+    window.addEventListener('keydown', handleKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', handleKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isOpenMobile, onCloseMobile]);
+
   const getMeterStatusLabel = () => {
     switch (status) {
       case 'listening':
@@ -206,7 +224,7 @@ function ActivityRail({
       {/* Mobile Drawer */}
       <AnimatePresence>
         {isOpenMobile && (
-          <div className="fixed inset-0 z-50 lg:hidden flex justify-end">
+          <div className="fixed inset-0 z-50 lg:hidden flex justify-end" role="dialog" aria-modal="true" aria-label="Session activity">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -215,9 +233,9 @@ function ActivityRail({
               onClick={onCloseMobile}
             />
             <motion.div
-              initial={{ x: 320 }}
+              initial={{ x: RAIL_WIDTH }}
               animate={{ x: 0 }}
-              exit={{ x: 320 }}
+              exit={{ x: RAIL_WIDTH }}
               transition={{ type: 'spring', damping: 25, stiffness: 250 }}
               className="relative z-10 h-full"
             >
