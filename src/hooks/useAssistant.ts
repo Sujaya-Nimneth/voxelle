@@ -4,13 +4,13 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useSpeechRecognition } from './useSpeechRecognition';
 import { useSpeechSynthesis } from './useSpeechSynthesis';
 import { optimizeImage } from '@/lib/imageUtils';
+import { buildHistoryForApi, isValidChatResponse } from '@/lib/chatResponse';
 import type {
   AssistantStatus,
   Message,
   ToolCall,
   ToolEvent,
   SessionEvent,
-  ChatResponse,
 } from '@/types/types';
 
 const STORAGE_KEY = 'voxelle_chat_history';
@@ -120,6 +120,10 @@ export function useAssistant() {
   const statusRef = useRef<AssistantStatus>('idle');
   const abortControllerRef = useRef<AbortController | null>(null);
   const isNetworkBusyRef = useRef(false);
+  // Generation token for the request lifecycle: bumped by every new request
+  // and by clearHistory so stale post-fetch work (tool animations, late
+  // appends) can detect it no longer owns the conversation.
+  const requestGenerationRef = useRef(0);
 
   // Mirrors messages so processMessage can read the latest history without
   // depending on the messages state array (which would churn its identity on
@@ -264,9 +268,19 @@ export function useAssistant() {
     setUploadedImage(optimized);
   }, []);
 
+  // Helper to append a system error banner (dismissed on retry, never persisted)
+  const appendSystemError = useCallback((content: string) => {
+    setMessages((prev) => [
+      ...prev,
+      { id: generateId(), role: 'system', content, timestamp: Date.now() },
+    ]);
+  }, []);
+
   // Process message pipeline with interruptibility and cancellation
   const processMessage = useCallback(
-    async (userText: string, image?: string | null) => {
+    async (userText: string, image?: string | null, options?: { isRetry?: boolean }) => {
+      const isRetry = options?.isRetry === true;
+
       // Abort any ongoing request before dispatching a new one
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -276,47 +290,64 @@ export function useAssistant() {
       stopSpeaking();
       isNetworkBusyRef.current = true;
 
+      const generation = ++requestGenerationRef.current;
       const controller = new AbortController();
       abortControllerRef.current = controller;
-      const timeoutId = setTimeout(() => controller.abort(), 35000); // 35s timeout
+      let timedOut = false;
+      const timeoutId = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, 35000); // 35s timeout
 
-      recordSignal(userText);
+      let userMessage: Message;
 
-      const userMessage: Message = {
-        id: generateId(),
-        role: 'user',
-        content: userText,
-        timestamp: Date.now(),
-        image: image || undefined,
-      };
+      if (isRetry) {
+        // Reuse the existing user turn (and its image) instead of appending a
+        // duplicate; drop stale error banners while we're at it.
+        const lastUser = [...messagesRef.current].reverse().find((m) => m.role === 'user');
+        if (!lastUser) {
+          clearTimeout(timeoutId);
+          isNetworkBusyRef.current = false;
+          return;
+        }
+        userMessage = lastUser;
+        setMessages((prev) => prev.filter((m) => m.role !== 'system'));
+      } else {
+        recordSignal(userText);
 
-      setMessages((prev) => [...prev, userMessage]);
+        userMessage = {
+          id: generateId(),
+          role: 'user',
+          content: userText,
+          timestamp: Date.now(),
+          image: image || undefined,
+        };
+        setMessages((prev) => [...prev, userMessage]);
+      }
+
       setStatus('processing');
 
       addSessionEvent(
-        `Signal dispatched: "${userText.slice(0, 22)}${userText.length > 22 ? '...' : ''}"`,
+        `Signal dispatched: "${userMessage.content.slice(0, 22)}${
+          userMessage.content.length > 22 ? '...' : ''
+        }"`,
         'TRANSIT · TLS 1.3',
         'normal'
       );
 
       try {
-        // Prepare messages for API: strip old base64 images from conversation history
-        const historyForApi = [...messagesRef.current, userMessage]
-          .slice(-10)
-          .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .map((m, idx, arr) => {
-            if (idx < arr.length - 1 && m.image) {
-              return { ...m, image: undefined };
-            }
-            return m;
-          });
+        // Prepare messages for API: strip system banners and old base64 images
+        const historyForApi = buildHistoryForApi(
+          messagesRef.current,
+          isRetry ? undefined : userMessage
+        );
 
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: historyForApi,
-            image: image || undefined,
+            image: userMessage.image,
           }),
           signal: controller.signal,
         });
@@ -328,14 +359,21 @@ export function useAssistant() {
           throw new Error(errData.error || `HTTP ${res.status}`);
         }
 
-        const data: ChatResponse = await res.json();
+        const raw: unknown = await res.json();
+        if (!isValidChatResponse(raw)) {
+          throw new Error('Received an invalid response from the assistant service.');
+        }
+        const data = raw;
 
         if (data.provider) setActiveProvider(data.provider);
         if (data.degraded !== undefined) setIsDegraded(data.degraded);
 
-        // Tool execution animations
+        // Tool execution animations — cancellable: a newer request or
+        // clearHistory during the staggered delays stops the sequence.
         if (data.toolCalls && data.toolCalls.length > 0) {
           for (const tc of data.toolCalls) {
+            if (requestGenerationRef.current !== generation) return;
+
             const toolEvent: ToolEvent = {
               id: generateId(),
               toolCall: { ...tc, status: 'executing' },
@@ -351,6 +389,8 @@ export function useAssistant() {
 
             // Realistic micro-delay for visual feedback
             await new Promise((resolve) => setTimeout(resolve, 800));
+
+            if (requestGenerationRef.current !== generation) return;
 
             setToolEvents((prev) =>
               prev.map((te) =>
@@ -372,7 +412,9 @@ export function useAssistant() {
           }
         }
 
-        // Add assistant reply
+        // Add assistant reply — only if this request still owns the conversation
+        if (requestGenerationRef.current !== generation) return;
+
         const assistantMessage: Message = {
           id: generateId(),
           role: 'assistant',
@@ -401,38 +443,43 @@ export function useAssistant() {
         }
       } catch (err: unknown) {
         clearTimeout(timeoutId);
+
+        // A newer request superseded this one (or history was cleared): that
+        // request owns the busy flag and status now — exit without clobbering.
+        if (controller !== abortControllerRef.current) return;
+
         isNetworkBusyRef.current = false;
 
         if (err instanceof Error && err.name === 'AbortError') {
-          console.warn('Assistant request was cancelled.');
-          setStatus('idle');
+          if (timedOut) {
+            console.warn('Assistant request timed out after 35s.');
+            appendSystemError('The assistant took too long to respond. Please try again.');
+            setStatus('idle');
+            addSessionEvent('Signal timed out', 'RETRY AVAILABLE', 'warn');
+          } else {
+            console.warn('Assistant request was cancelled.');
+            setStatus('idle');
+          }
           return;
         }
 
         console.error('Assistant pipeline error:', err);
-        const errorMessage: Message = {
-          id: generateId(),
-          role: 'system',
-          content:
-            err instanceof Error && err.message
-              ? `Error: ${err.message}. Tap to retry.`
-              : 'An error occurred while communicating with the assistant. Please retry.',
-          timestamp: Date.now(),
-        };
-        setMessages((prev) => [...prev, errorMessage]);
+        appendSystemError(
+          err instanceof Error && err.message
+            ? `Error: ${err.message}. Tap retry to try again.`
+            : 'An error occurred while communicating with the assistant. Please retry.'
+        );
         setStatus('idle');
         addSessionEvent('Signal interrupted', 'RETRY AVAILABLE', 'warn');
       }
     },
-    [autoSpeak, ttsSupported, speak, stopSpeaking, addSessionEvent, recordSignal]
+    [autoSpeak, ttsSupported, speak, stopSpeaking, addSessionEvent, recordSignal, appendSystemError]
   );
 
-  // Retry the last user prompt if failed
+  // Retry the last user prompt if failed — reuses the existing turn rather
+  // than dispatching (and duplicating) it again.
   const retryLastMessage = useCallback(() => {
-    const lastUser = [...messagesRef.current].reverse().find((m) => m.role === 'user');
-    if (lastUser) {
-      processMessage(lastUser.content, lastUser.image);
-    }
+    processMessage('', undefined, { isRetry: true });
   }, [processMessage]);
 
   // Watch speech recognition transcript
@@ -482,13 +529,19 @@ export function useAssistant() {
   );
 
   const clearHistory = useCallback(() => {
+    // Fully invalidate any in-flight request: the superseded request's catch
+    // and post-fetch animation loop must not touch state after this.
+    requestGenerationRef.current++;
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
+      abortControllerRef.current = null;
     }
+    isNetworkBusyRef.current = false;
     stopSpeaking();
     stopListening();
     setMessages([]);
     setToolEvents([]);
+    setStatus('idle');
     if (typeof window !== 'undefined') {
       localStorage.removeItem(STORAGE_KEY);
     }
