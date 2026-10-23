@@ -344,7 +344,7 @@ function Sidebar({
               <select
                 value={ttsSettings.voiceURI || ''}
                 onChange={(e) => onUpdateTtsSettings({ voiceURI: e.target.value })}
-                className="w-full bg-[rgba(8,11,20,0.8)] border border-line rounded-lg p-2 text-xs text-white outline-none cursor-pointer"
+                className="w-full bg-[rgba(8,11,20,0.8)] border border-line rounded-lg p-2 text-[16px] text-white outline-none focus-visible:ring-1 focus-visible:ring-cyan cursor-pointer"
               >
                 <option value="">Default (System Natural Voice)</option>
                 {voices

@@ -66,7 +66,7 @@ function ComposerComponent({
   );
 
   return (
-    <div className="flex-shrink-0 px-4 sm:px-8 pb-6 pt-2">
+    <div className="flex-shrink-0 px-4 sm:px-8 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
       {/* Optional Image Dropzone */}
       <AnimatePresence>
         {showDropzone && (
@@ -119,7 +119,8 @@ function ComposerComponent({
               ? 'Listening to your voice... (say something)'
               : 'Message Voxelle or press "/" to focus…'
           }
-          className="flex-1 bg-transparent border-none outline-none text-[13px] text-text placeholder:text-dim px-2 font-sans"
+          className="flex-1 bg-transparent border-none outline-none text-[16px] text-text placeholder:text-dim px-2 font-sans"
+          aria-label="Message Voxelle"
         />
 
         {/* Stop Speaking Button if TTS active */}

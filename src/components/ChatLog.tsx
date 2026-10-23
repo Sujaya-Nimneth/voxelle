@@ -111,7 +111,9 @@ function ChatLog({
       className="flex-1 overflow-y-auto px-6 sm:px-10 lg:px-14 py-8 lg:py-10 relative"
     >
       {/* Ambient Greeting & Suggestions Header */}
-      <div className={`max-w-[760px] transition-all duration-300 ${isEmpty ? 'mb-8' : 'mb-6'}`}>
+      <div
+        className={`max-w-[760px] mx-auto transition-all duration-300 ${isEmpty ? 'mb-8' : 'mb-6'}`}
+      >
         <div className="text-cyan font-mono text-[11px] tracking-[1.3px] uppercase font-medium flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-cyan" />
           <span>Ambient Voice Co-Pilot</span>
@@ -141,8 +143,8 @@ function ChatLog({
         </div>
       </div>
 
-      {/* Messages Thread */}
-      <div className="max-w-[760px] space-y-6">
+      {/* Messages Thread — centered to line up with the composer bar */}
+      <div className="max-w-[760px] mx-auto space-y-6">
         {/* Initial Bot Greeting when empty */}
         {isEmpty && (
           <motion.div
@@ -229,7 +231,7 @@ function ChatLog({
                           <img
                             src={message.image}
                             alt="Attached visual signal"
-                            className="max-h-48 w-full object-cover"
+                            className="max-h-48 w-auto max-w-full object-contain"
                           />
                         </div>
                       )}
@@ -327,7 +329,9 @@ function ChatLog({
               <div className="max-w-[85%] sm:max-w-[75%]">
                 <div className="rounded-2xl rounded-br-md py-2.5 px-4 border border-cyan bg-[rgba(53,230,255,0.12)] shadow-[0_0_20px_rgba(53,230,255,0.15)] flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-cyan animate-ping" />
-                  <p className="text-[13px] text-white italic font-sans">{interimTranscript}</p>
+                  <p className="text-[13px] text-white italic font-sans whitespace-pre-wrap">
+                    {interimTranscript}
+                  </p>
                 </div>
               </div>
             </motion.div>
