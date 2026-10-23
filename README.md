@@ -9,8 +9,9 @@ Voxelle is a voice-first multimodal AI assistant designed with a futuristic cybe
 ### 🎙️ Speech-First Interactions
 *   **Intelligent Speech-to-Text (STT):** Integrated with the browser's Web Speech API for low-latency voice recognition. Hands-free input that auto-triggers assistant pipeline actions.
 *   **Live Interim Speech Preview:** View live partial transcript bubbles with pulsing aura while speaking before the final command is dispatched.
-*   **High-Fidelity Text-to-Speech (TTS):** Naturally speaks responses back using prioritized high-fidelity voices (Google Natural, Samantha, Daniel, or user-selected voices).
+*   **High-Fidelity Text-to-Speech (TTS):** Naturally speaks responses back using prioritized high-fidelity voices (Google Natural, Samantha, Daniel, or user-selected voices), chunked into sentence-bounded utterances for reliable long-form playback.
 *   **Instant Interruption & Mute:** Tap the mic or type new text to instantly interrupt and silence speaking audio with zero UI lockup.
+*   **Live Response Streaming:** Replies stream token-by-token from the API route (NDJSON events) with a blinking cursor — the first words appear as they're generated instead of after the full response.
 
 ### 📊 Reactive Audio Frequency Visualizer
 *   **Real Web Audio API AnalyserNode:** The Activity Rail meter connects directly to the user's microphone stream via an `AudioContext` and FFT frequency analyzer, dynamically responding to pitch and vocal intensity in real time.
@@ -18,9 +19,11 @@ Voxelle is a voice-first multimodal AI assistant designed with a futuristic cybe
 
 ### 🌐 Advanced Multi-LLM Provider Engine
 Equipped with a secure server-side API router (`/api/chat`) that can be hot-swapped via environment variables:
-1.  **Google Gemini (Gemini 2.0 Flash):** Native support for multimodal vision input, advanced reasoning, and developer-defined tool function calling. Secured with `x-goog-api-key` header authorization.
-2.  **Groq (Llama-3.3-70b-versatile):** Ultra-low-latency response stream with function calling capability.
-3.  **Frictionless Demo Mode:** A standalone mock mode that works immediately **without any API keys**, enabling full simulated demonstrations of chatbot responses and smart home/calendar tool actions.
+1.  **Google Gemini (Gemini 2.0 Flash):** Native support for multimodal vision input, advanced reasoning, and developer-defined tool function calling, streamed via SSE. Secured with `x-goog-api-key` header authorization.
+2.  **Groq (Llama-3.3-70b-versatile):** Ultra-low-latency token streaming with function calling capability.
+3.  **Frictionless Demo Mode:** A standalone mock mode that works immediately **without any API keys**, enabling full simulated demonstrations of chatbot responses and smart home/calendar tool actions — including simulated streaming.
+
+All providers speak the same NDJSON event stream (`meta` / `delta` / `tool` / `error` / `done`). If a provider fails before streaming starts (missing key, quota, HTTP error), the route degrades to mock mode and the client's provider badge explains why; mid-stream failures surface as honest, retryable errors. Upstream calls carry a 30s server-side timeout so a hung provider can't burn the function to the platform limit.
 
 ### 🔌 Intelligent Tool Execution (Function Calling)
 Voxelle doesn't just talk — it acts. Built with direct tool calling definitions, it processes instructions into structured API payloads with real-time UI logging:
@@ -43,8 +46,8 @@ Voxelle features a high-fidelity visual layout inspired by cyberpunk interfaces:
 | **Cyber Shell** | 3-Column responsive layout (Sidebar, Command Center, Activity Rail). | CSS Grid with dynamic `100dvh` mobile support |
 | **Lucide Iconography** | Crisp, lightweight, tree-shaken SVG icons across all controls. | `lucide-react` |
 | **Glassmorphism** | Semi-transparent frosted panels that blend into cosmic dark space. | CSS `backdrop-filter: blur(20px)` and subtle glowing borders |
-| **Portal Dialogs** | Connected Tools, Automations, and Preferences modals rendered via `createPortal`. | Accessible ARIA dialogs with focus trap and `Esc` dismissal |
-| **Smart Markdown** | Renders formatted bold text, inline code, and lists with cyber styling. | Custom lightweight parser without heavy dependencies |
+| **Portal Dialogs** | Connected Tools, Automations, and Preferences modals rendered via `createPortal`. | Accessible ARIA dialogs with focus trap, focus restoration, and `Esc` dismissal |
+| **Smart Markdown** | Renders formatted bold text, inline code, and lists with cyber styling. | Custom lightweight parser without heavy dependencies, memoized per message |
 | **Smart Auto-Scroll** | Automatically sticks to bottom when active, but preserves reading position if scrolled up. | Native viewport detection with floating "Latest" jump pill |
 
 ---
