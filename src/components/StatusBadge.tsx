@@ -49,7 +49,7 @@ export default function StatusBadge({ status, provider, isDegraded }: StatusBadg
   return (
     <div className="flex items-center gap-2">
       {provider && provider !== 'mock' && (
-        <span className="hidden md:inline-block font-mono text-[9px] uppercase px-2 py-0.5 rounded-full border border-white/10 text-[var(--muted)] bg-white/[0.02]">
+        <span className="hidden md:inline-block font-mono text-[9px] uppercase px-2 py-0.5 rounded-full border border-white/10 text-muted bg-white/[0.02]">
           {isDegraded ? `${provider} (fallback)` : provider}
         </span>
       )}

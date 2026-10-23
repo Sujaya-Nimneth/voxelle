@@ -36,7 +36,7 @@ export default function PermissionWarning({
       className="px-6 sm:px-8 mt-2"
     >
       <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-[rgba(255,117,148,0.1)] border border-[rgba(255,117,148,0.25)] text-[#ff99b3]">
-        <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--danger)]" />
+        <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5 text-danger" />
         <div className="flex-1 min-w-0">
           <p className="text-xs leading-relaxed font-sans">{message}</p>
         </div>

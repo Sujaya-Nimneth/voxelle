@@ -107,17 +107,17 @@ export default function ImageDropzone({
                 className="h-12 w-12 rounded-lg object-cover flex-shrink-0 border border-white/10"
               />
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-[#edf5ff] font-medium truncate">
+                <p className="text-xs text-text font-medium truncate">
                   Visual Signal Attached
                 </p>
-                <p className="text-[10px] text-[var(--muted)] font-mono truncate mt-0.5">
+                <p className="text-[10px] text-muted font-mono truncate mt-0.5">
                   Multimodal vision analysis ready
                 </p>
               </div>
               <button
                 type="button"
                 onClick={onImageRemove}
-                className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--muted)] hover:text-[var(--danger)] transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg hover:bg-white/10 text-muted hover:text-danger transition-colors cursor-pointer"
                 aria-label="Remove attached image"
               >
                 <X className="w-4 h-4" />
@@ -138,14 +138,14 @@ export default function ImageDropzone({
                 flex items-center justify-center py-3 px-4
                 ${
                   isDragActive
-                    ? 'border-[var(--cyan)] bg-[rgba(53,230,255,0.1)] shadow-[0_0_20px_rgba(53,230,255,0.15)]'
-                    : 'border-[var(--line)] hover:border-cyan-500/40 bg-white/[0.02] hover:bg-white/[0.04]'
+                    ? 'border-cyan bg-[rgba(53,230,255,0.1)] shadow-[0_0_20px_rgba(53,230,255,0.15)]'
+                    : 'border-line hover:border-cyan-500/40 bg-white/[0.02] hover:bg-white/[0.04]'
                 }
               `}
             >
               <input {...getInputProps()} />
-              <div className="flex items-center gap-2 text-[var(--muted)] hover:text-white transition-colors">
-                <ImagePlus className="w-4 h-4 text-[var(--cyan)] flex-shrink-0" />
+              <div className="flex items-center gap-2 text-muted hover:text-white transition-colors">
+                <ImagePlus className="w-4 h-4 text-cyan flex-shrink-0" />
                 <span className="text-xs font-mono">
                   {isDragActive
                     ? 'Drop image to analyze...'
@@ -155,7 +155,7 @@ export default function ImageDropzone({
             </div>
 
             {errorMessage && (
-              <p className="text-[11px] text-[var(--danger)] mt-1.5 px-1 flex items-center gap-1 font-mono">
+              <p className="text-[11px] text-danger mt-1.5 px-1 flex items-center gap-1 font-mono">
                 <AlertCircle className="w-3.5 h-3.5" />
                 <span>{errorMessage}</span>
               </p>

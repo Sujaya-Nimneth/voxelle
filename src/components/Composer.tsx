@@ -93,10 +93,10 @@ function ComposerComponent({
           onClick={() => setShowDropzone((v) => !v)}
           className={`w-[38px] h-[38px] rounded-[10px] flex items-center justify-center transition-all cursor-pointer flex-shrink-0 ${
             uploadedImage
-              ? 'bg-cyan-500/20 text-[var(--cyan)] border border-cyan-500/40 shadow-[0_0_12px_rgba(53,230,255,0.2)]'
+              ? 'bg-cyan-500/20 text-cyan border border-cyan-500/40 shadow-[0_0_12px_rgba(53,230,255,0.2)]'
               : showDropzone
               ? 'bg-white/10 text-white'
-              : 'text-[#8190a8] hover:text-white hover:bg-white/[0.04]'
+              : 'text-dim hover:text-white hover:bg-white/[0.04]'
           }`}
           title="Attach visual signal (PNG, JPEG, WebP)"
           aria-label="Attach image"
@@ -119,7 +119,7 @@ function ComposerComponent({
               ? 'Listening to your voice... (say something)'
               : 'Message Voxelle or press "/" to focus…'
           }
-          className="flex-1 bg-transparent border-none outline-none text-[13px] text-[#edf5ff] placeholder:text-[#687992] px-2 font-sans"
+          className="flex-1 bg-transparent border-none outline-none text-[13px] text-text placeholder:text-dim px-2 font-sans"
         />
 
         {/* Stop Speaking Button if TTS active */}
@@ -127,7 +127,7 @@ function ComposerComponent({
           <button
             type="button"
             onClick={onStopSpeaking}
-            className="px-2.5 py-1.5 rounded-lg text-[11px] font-mono text-[var(--violet)] bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0"
+            className="px-2.5 py-1.5 rounded-lg text-[11px] font-mono text-violet bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0"
             title="Silence speech audio"
             aria-label="Mute assistant speech"
           >
@@ -144,10 +144,10 @@ function ComposerComponent({
           disabled={!sttSupported}
           className={`w-[38px] h-[38px] rounded-full border transition-all flex items-center justify-center cursor-pointer flex-shrink-0 relative ${
             status === 'listening'
-              ? 'border-[var(--cyan)] bg-[rgba(53,230,255,0.25)] text-white shadow-[0_0_22px_var(--cyan)]'
+              ? 'border-cyan bg-[rgba(53,230,255,0.25)] text-white shadow-[0_0_22px_var(--cyan)]'
               : status === 'speaking'
-              ? 'border-[var(--violet)] bg-[rgba(146,108,255,0.2)] text-[var(--violet)] shadow-[0_0_18px_rgba(146,108,255,0.3)]'
-              : 'border-[rgba(53,230,255,0.5)] bg-[rgba(39,176,208,0.12)] text-[var(--cyan)] shadow-[0_0_16px_rgba(53,230,255,0.1)] hover:bg-[rgba(39,176,208,0.22)]'
+              ? 'border-violet bg-[rgba(146,108,255,0.2)] text-violet shadow-[0_0_18px_rgba(146,108,255,0.3)]'
+              : 'border-[rgba(53,230,255,0.5)] bg-[rgba(39,176,208,0.12)] text-cyan shadow-[0_0_16px_rgba(53,230,255,0.1)] hover:bg-[rgba(39,176,208,0.22)]'
           } disabled:opacity-30 disabled:cursor-not-allowed`}
           title={status === 'listening' ? 'Stop listening' : 'Start voice input'}
           aria-label={status === 'listening' ? 'Stop voice recording' : 'Start voice recording'}

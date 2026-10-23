@@ -6,13 +6,16 @@
   --surface-2: #111827;
   --line: rgba(163, 184, 218, 0.13);
   --muted: #8090aa;
+  /* Secondary text tiers — both clear WCAG AA (4.5:1) on the dark surfaces,
+     unlike the one-off grays they replaced (several sat near 4.0:1 at 9-10px). */
+  --dim: #93a5c2; /* labels, metadata, placeholders, inactive controls */
+  --soft: #c3d0e4; /* body-strength text on dark: replies, chips, event text */
   --text: #f0f5ff;
   --cyan: #35e6ff;
   --violet: #926cff;
+  --violet-soft: #d3c8ff;
   --lime: #b5f56f;
   --danger: #ff7594;
-  --font-sans: var(--font-manrope), system-ui, sans-serif;
-  --font-mono: var(--font-dm-mono), monospace;
 }
 
 @theme inline {
@@ -21,9 +24,12 @@
   --color-surface-2: var(--surface-2);
   --color-line: var(--line);
   --color-muted: var(--muted);
+  --color-dim: var(--dim);
+  --color-soft: var(--soft);
   --color-text: var(--text);
   --color-cyan: var(--cyan);
   --color-violet: var(--violet);
+  --color-violet-soft: var(--violet-soft);
   --color-lime: var(--lime);
   --color-danger: var(--danger);
   --font-sans: var(--font-manrope), system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
@@ -61,6 +67,12 @@ body {
   overflow-x: hidden;
 }
 
+/* Mobile shell uses 100dvh; match it so the desktop grid doesn't overflow
+   the URL-bar-collapsed viewport. */
+.cyber-shell {
+  min-height: 100dvh;
+}
+
 /* Ambient Cyber Gradients & Grid */
 .cyber-bg {
   background: radial-gradient(700px 420px at 76% -8%, rgba(91, 67, 190, 0.22), transparent 68%),
@@ -85,7 +97,6 @@ body {
   position: relative;
   display: grid;
   grid-template-columns: 262px minmax(500px, 1fr) 316px;
-  min-height: 100vh;
 }
 
 @media (max-width: 1180px) {

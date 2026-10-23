@@ -112,14 +112,14 @@ function ChatLog({
     >
       {/* Ambient Greeting & Suggestions Header */}
       <div className={`max-w-[760px] transition-all duration-300 ${isEmpty ? 'mb-8' : 'mb-6'}`}>
-        <div className="text-[var(--cyan)] font-mono text-[11px] tracking-[1.3px] uppercase font-medium flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-[var(--cyan)]" />
+        <div className="text-cyan font-mono text-[11px] tracking-[1.3px] uppercase font-medium flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5 text-cyan" />
           <span>Ambient Voice Co-Pilot</span>
         </div>
         <h1 className="text-[26px] sm:text-[32px] font-extrabold tracking-[-1.5px] leading-[1.18] my-[8px] text-white">
           What do you want to put in motion?
         </h1>
-        <p className="text-[#8d9cb5] text-[13.5px] leading-[1.6] max-w-[540px] mb-[20px]">
+        <p className="text-dim text-[13.5px] leading-[1.6] max-w-[540px] mb-[20px]">
           Talk naturally, type a command, or let Voxelle coordinate connected tools and automations.
         </p>
 
@@ -131,9 +131,9 @@ function ChatLog({
               <button
                 key={idx}
                 onClick={() => onSelectSuggestion(item.text)}
-                className="flex items-center text-[#b7c9df] hover:text-white text-[12px] py-[8px] px-[12px] rounded-[9px] border border-[var(--line)] bg-white/[0.025] hover:bg-white/[0.06] hover:border-cyan-500/30 transition-all cursor-pointer group active:scale-[0.98]"
+                className="flex items-center text-soft hover:text-white text-[12px] py-[8px] px-[12px] rounded-[9px] border border-line bg-white/[0.025] hover:bg-white/[0.06] hover:border-cyan-500/30 transition-all cursor-pointer group active:scale-[0.98]"
               >
-                <Icon className="w-3.5 h-3.5 text-[var(--cyan)] mr-[7px] group-hover:scale-110 transition-transform" />
+                <Icon className="w-3.5 h-3.5 text-cyan mr-[7px] group-hover:scale-110 transition-transform" />
                 <span>{item.text}</span>
               </button>
             );
@@ -152,11 +152,11 @@ function ChatLog({
             className="space-y-4 pt-2"
           >
             <div className="flex gap-[12px] items-start">
-              <div className="w-[30px] h-[30px] flex-shrink-0 rounded-[9px] grid place-items-center bg-gradient-to-br from-[rgba(53,230,255,0.9)] to-[rgba(146,108,255,0.85)] text-[#07111b] shadow-[0_0_15px_rgba(53,230,255,0.2)]">
-                <Sparkles className="w-4 h-4 text-[#07111b] stroke-[2.5]" />
+              <div className="w-[30px] h-[30px] flex-shrink-0 rounded-[9px] grid place-items-center bg-gradient-to-br from-[rgba(53,230,255,0.9)] to-[rgba(146,108,255,0.85)] text-ink shadow-[0_0_15px_rgba(53,230,255,0.2)]">
+                <Sparkles className="w-4 h-4 text-ink stroke-[2.5]" />
               </div>
-              <div className="pt-[2px] text-[#cdd8e8] text-[13px] leading-[1.64]">
-                <strong className="block text-[#f4f7ff] text-[12px] font-semibold mb-[2px]">
+              <div className="pt-[2px] text-soft text-[13px] leading-[1.64]">
+                <strong className="block text-text text-[12px] font-semibold mb-[2px]">
                   Voxelle
                 </strong>
                 I’m online and synced with your workspace. I can help coordinate calendar events, smart devices, automations, or analyze uploaded visual signals.
@@ -168,14 +168,14 @@ function ChatLog({
               onClick={onStartVoice}
               className="ml-[42px] flex items-center gap-[13px] max-w-[465px] p-[12px] rounded-[12px] border border-[rgba(53,230,255,0.22)] bg-gradient-to-r from-[rgba(23,120,145,0.14)] to-[rgba(89,65,169,0.14)] hover:border-cyan-400/40 hover:from-[rgba(23,120,145,0.2)] hover:to-[rgba(89,65,169,0.2)] transition-all cursor-pointer text-left group"
             >
-              <div className="w-[34px] h-[34px] rounded-full border border-[var(--cyan)] grid place-items-center text-[var(--cyan)] group-hover:scale-105 transition-transform flex-shrink-0">
-                <Mic className="w-4 h-4 text-[var(--cyan)]" />
+              <div className="w-[34px] h-[34px] rounded-full border border-cyan grid place-items-center text-cyan group-hover:scale-105 transition-transform flex-shrink-0">
+                <Mic className="w-4 h-4 text-cyan" />
               </div>
               <div>
                 <b className="text-[12px] text-white block font-semibold">
                   Voice mode is standing by
                 </b>
-                <span className="text-[10px] text-[#8695ad] block mt-0.5">
+                <span className="text-[10px] text-dim block mt-0.5">
                   Tap the mic or tap here to start a hands-free voice dialogue
                 </span>
               </div>
@@ -195,7 +195,7 @@ function ChatLog({
                   key={message.id}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="p-3.5 rounded-xl border border-[rgba(255,117,148,0.3)] bg-[rgba(255,117,148,0.08)] text-[var(--danger)] text-xs flex items-center justify-between font-mono"
+                  className="p-3.5 rounded-xl border border-[rgba(255,117,148,0.3)] bg-[rgba(255,117,148,0.08)] text-danger text-xs flex items-center justify-between font-mono"
                 >
                   <span>{message.content}</span>
                   {onRetry && (
@@ -233,15 +233,15 @@ function ChatLog({
                           />
                         </div>
                       )}
-                      <p className="text-[13px] text-[#edf5ff] leading-[1.64] whitespace-pre-wrap font-sans">
+                      <p className="text-[13px] text-text leading-[1.64] whitespace-pre-wrap font-sans">
                         {message.content}
                       </p>
                     </div>
                     <div className="flex items-center justify-end gap-1.5 mt-1 px-1">
-                      <span className="text-[9px] font-mono text-[var(--muted)]">
+                      <span className="text-[9px] font-mono text-muted">
                         {formatTime(message.timestamp)}
                       </span>
-                      <span className="text-[9px] font-mono text-[var(--cyan)] font-medium">
+                      <span className="text-[9px] font-mono text-cyan font-medium">
                         You
                       </span>
                     </div>
@@ -259,16 +259,16 @@ function ChatLog({
                 transition={{ duration: 0.2 }}
                 className="flex gap-[12px] items-start group"
               >
-                <div className="w-[30px] h-[30px] flex-shrink-0 rounded-[9px] grid place-items-center bg-gradient-to-br from-[rgba(53,230,255,0.9)] to-[rgba(146,108,255,0.85)] text-[#07111b] shadow-[0_0_15px_rgba(53,230,255,0.2)]">
-                  <Sparkles className="w-4 h-4 text-[#07111b] stroke-[2.5]" />
+                <div className="w-[30px] h-[30px] flex-shrink-0 rounded-[9px] grid place-items-center bg-gradient-to-br from-[rgba(53,230,255,0.9)] to-[rgba(146,108,255,0.85)] text-ink shadow-[0_0_15px_rgba(53,230,255,0.2)]">
+                  <Sparkles className="w-4 h-4 text-ink stroke-[2.5]" />
                 </div>
                 <div className="flex-1 min-w-0 pt-[2px]">
                   <div className="flex items-center justify-between mb-[3px]">
                     <div className="flex items-center gap-2">
-                      <strong className="text-[#f4f7ff] text-[12px] font-semibold">
+                      <strong className="text-text text-[12px] font-semibold">
                         Voxelle
                       </strong>
-                      <span className="text-[9px] font-mono text-[var(--muted)]">
+                      <span className="text-[9px] font-mono text-muted">
                         {formatTime(message.timestamp)}
                       </span>
                     </div>
@@ -278,7 +278,7 @@ function ChatLog({
                       {onSpeakText && (
                         <button
                           onClick={() => onSpeakText(message.content)}
-                          className="p-1 rounded text-[var(--muted)] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                          className="p-1 rounded text-muted hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                           title="Read aloud"
                           aria-label="Read response aloud"
                         >
@@ -287,12 +287,12 @@ function ChatLog({
                       )}
                       <button
                         onClick={() => handleCopy(message.id, message.content)}
-                        className="p-1 rounded text-[var(--muted)] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                        className="p-1 rounded text-muted hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                         title="Copy to clipboard"
                         aria-label="Copy message text"
                       >
                         {copiedId === message.id ? (
-                          <Check className="w-3.5 h-3.5 text-[var(--lime)]" />
+                          <Check className="w-3.5 h-3.5 text-lime" />
                         ) : (
                           <Copy className="w-3.5 h-3.5" />
                         )}
@@ -300,11 +300,11 @@ function ChatLog({
                     </div>
                   </div>
 
-                  <div className="text-[#cdd8e8] text-[13px]">
+                  <div className="text-soft text-[13px]">
                     <MarkdownMessage content={message.content} />
                     {message.isStreaming && (
                       <span
-                        className="inline-block w-[7px] h-[14px] ml-0.5 align-middle rounded-[1px] bg-[var(--cyan)] animate-pulse"
+                        className="inline-block w-[7px] h-[14px] ml-0.5 align-middle rounded-[1px] bg-cyan animate-pulse"
                         aria-hidden="true"
                       />
                     )}
@@ -325,8 +325,8 @@ function ChatLog({
               className="flex justify-end"
             >
               <div className="max-w-[85%] sm:max-w-[75%]">
-                <div className="rounded-2xl rounded-br-md py-2.5 px-4 border border-[var(--cyan)] bg-[rgba(53,230,255,0.12)] shadow-[0_0_20px_rgba(53,230,255,0.15)] flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[var(--cyan)] animate-ping" />
+                <div className="rounded-2xl rounded-br-md py-2.5 px-4 border border-cyan bg-[rgba(53,230,255,0.12)] shadow-[0_0_20px_rgba(53,230,255,0.15)] flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-cyan animate-ping" />
                   <p className="text-[13px] text-white italic font-sans">{interimTranscript}</p>
                 </div>
               </div>
@@ -343,15 +343,15 @@ function ChatLog({
               exit={{ opacity: 0, y: -4 }}
               className="flex gap-[12px] items-start"
             >
-              <div className="w-[30px] h-[30px] flex-shrink-0 rounded-[9px] grid place-items-center bg-gradient-to-br from-[rgba(53,230,255,0.9)] to-[rgba(146,108,255,0.85)] text-[#07111b]">
-                <Sparkles className="w-4 h-4 text-[#07111b] stroke-[2.5]" />
+              <div className="w-[30px] h-[30px] flex-shrink-0 rounded-[9px] grid place-items-center bg-gradient-to-br from-[rgba(53,230,255,0.9)] to-[rgba(146,108,255,0.85)] text-ink">
+                <Sparkles className="w-4 h-4 text-ink stroke-[2.5]" />
               </div>
               <div className="pt-1.5">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-[var(--line)]">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[var(--cyan)] cyber-dot-1" />
-                  <div className="w-1.5 h-1.5 rounded-full bg-[var(--violet)] cyber-dot-2" />
-                  <div className="w-1.5 h-1.5 rounded-full bg-[var(--cyan)] cyber-dot-3" />
-                  <span className="text-[10px] font-mono text-[var(--muted)] ml-1">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-line">
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan cyber-dot-1" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-violet cyber-dot-2" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan cyber-dot-3" />
+                  <span className="text-[10px] font-mono text-muted ml-1">
                     Processing signal...
                   </span>
                 </div>
@@ -369,7 +369,7 @@ function ChatLog({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.8, y: 10 }}
             onClick={scrollToBottom}
-            className="fixed bottom-24 right-8 lg:right-96 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[rgba(14,20,34,0.9)] border border-cyan-500/40 text-[var(--cyan)] text-xs font-mono shadow-[0_4px_16px_rgba(0,0,0,0.5)] hover:bg-cyan-500/10 transition-colors cursor-pointer"
+            className="fixed bottom-24 right-8 lg:right-96 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[rgba(14,20,34,0.9)] border border-cyan-500/40 text-cyan text-xs font-mono shadow-[0_4px_16px_rgba(0,0,0,0.5)] hover:bg-cyan-500/10 transition-colors cursor-pointer"
           >
             <ArrowDown className="w-3.5 h-3.5" />
             <span>Latest</span>

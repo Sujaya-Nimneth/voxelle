@@ -92,19 +92,19 @@ export default function Home() {
         {/* ─── Center Command Center ─── */}
         <main className="flex flex-col min-w-0 h-[100dvh] overflow-hidden">
           {/* Header (82px) */}
-          <header className="h-[82px] px-6 sm:px-8 flex items-center justify-between border-b border-[var(--line)] flex-shrink-0 z-20 bg-[rgba(8,11,20,0.65)] backdrop-blur-md">
+          <header className="h-[82px] px-6 sm:px-8 flex items-center justify-between border-b border-line flex-shrink-0 z-20 bg-[rgba(8,11,20,0.65)] backdrop-blur-md">
             <div className="flex items-center gap-3">
               {/* Mobile Sidebar Toggle */}
               <button
                 onClick={() => setIsMobileSidebarOpen(true)}
-                className="lg:hidden p-2 rounded-lg text-[var(--muted)] hover:text-white hover:bg-white/5 cursor-pointer"
+                className="lg:hidden p-2 rounded-lg text-muted hover:text-white hover:bg-white/5 cursor-pointer"
                 aria-label="Open workspace menu"
               >
                 <Menu className="w-5 h-5" />
               </button>
 
-              <div className="font-mono text-[11px] tracking-[0.4px] text-[#75849e]">
-                WORKSPACE / <b className="font-medium text-[#c9daf1]">COMMAND CENTER</b>
+              <div className="font-mono text-[11px] tracking-[0.4px] text-dim">
+                WORKSPACE / <b className="font-medium text-soft">COMMAND CENTER</b>
               </div>
             </div>
 
@@ -118,7 +118,7 @@ export default function Home() {
               {/* Clear conversation action */}
               <button
                 onClick={clearHistory}
-                className="hidden sm:flex items-center gap-1.5 p-2 rounded-lg text-[var(--muted)] hover:text-white hover:bg-white/5 transition-colors text-xs font-mono cursor-pointer"
+                className="hidden sm:flex items-center gap-1.5 p-2 rounded-lg text-muted hover:text-white hover:bg-white/5 transition-colors text-xs font-mono cursor-pointer"
                 title="Reset session history"
               >
                 <Trash2 className="w-4 h-4" />
@@ -127,10 +127,10 @@ export default function Home() {
               {/* Mobile Activity Rail Toggle */}
               <button
                 onClick={() => setIsMobileRailOpen(true)}
-                className="lg:hidden p-2 rounded-lg text-[var(--muted)] hover:text-white hover:bg-white/5 font-mono text-[10px] flex items-center gap-1.5 cursor-pointer border border-[var(--line)]"
+                className="lg:hidden p-2 rounded-lg text-muted hover:text-white hover:bg-white/5 font-mono text-[10px] flex items-center gap-1.5 cursor-pointer border border-line"
                 aria-label="Open activity rail"
               >
-                <Activity className="w-3.5 h-3.5 text-[var(--lime)]" />
+                <Activity className="w-3.5 h-3.5 text-lime" />
                 <span>LOG</span>
               </button>
             </div>

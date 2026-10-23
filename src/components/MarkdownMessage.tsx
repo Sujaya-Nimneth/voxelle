@@ -55,7 +55,7 @@ function MarkdownMessage({ content }: MarkdownMessageProps) {
         if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
           return (
             <div key={idx} className="flex items-start gap-2 pl-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-[var(--cyan)] mt-2 flex-shrink-0" />
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan mt-2 flex-shrink-0" />
               <span>{renderInline(trimmed.slice(2))}</span>
             </div>
           );
@@ -66,7 +66,7 @@ function MarkdownMessage({ content }: MarkdownMessageProps) {
         if (numMatch) {
           return (
             <div key={idx} className="flex items-start gap-2 pl-1">
-              <span className="font-mono text-[10px] text-[var(--cyan)] font-bold mt-0.5">
+              <span className="font-mono text-[10px] text-cyan font-bold mt-0.5">
                 {numMatch[1]}.
               </span>
               <span>{renderInline(numMatch[2])}</span>
