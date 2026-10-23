@@ -48,6 +48,13 @@ function ChatLog({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const isNearBottomRef = useRef(true);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
 
   // Monitor scroll position
   const handleScroll = () => {
@@ -77,9 +84,12 @@ function ChatLog({
   }, [messages, isProcessing, interimTranscript]);
 
   const handleCopy = (id: string, text: string) => {
-    navigator.clipboard.writeText(text);
+    // Clipboard writes reject on non-secure contexts or denied permission —
+    // never leave the promise unhandled.
+    navigator.clipboard?.writeText(text)?.catch(() => {});
     setCopiedId(id);
-    setTimeout(() => {
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => {
       setCopiedId(null);
     }, 2000);
   };

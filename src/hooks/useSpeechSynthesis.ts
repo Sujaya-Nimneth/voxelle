@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect, useSyncExternalStore } from 'react';
+import { chunkTextForSpeech } from '@/lib/speechChunks';
 
 export interface SpeechSettings {
   rate: number;
@@ -88,6 +89,32 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
     setSettings((prev) => ({ ...prev, ...newSettings }));
   }, []);
 
+  // iOS/WebKit only honors speechSynthesis.speak() calls made during a user
+  // gesture; a silent primer on the first interaction unlocks later
+  // programmatic speaks (e.g. auto-speak after a fetch resolves).
+  useEffect(() => {
+    if (!isSupported || typeof window === 'undefined' || !window.speechSynthesis) return;
+
+    const unlock = () => {
+      try {
+        const primer = new SpeechSynthesisUtterance(' ');
+        primer.volume = 0;
+        window.speechSynthesis.speak(primer);
+      } catch {
+        // Priming is best-effort
+      }
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, [isSupported]);
+
   const speak = useCallback(
     (text: string, onEnd?: () => void) => {
       if (!isSupported || typeof window === 'undefined' || !window.speechSynthesis) {
@@ -113,8 +140,11 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
         return;
       }
 
-      const utterance = new SpeechSynthesisUtterance(cleanedText);
-      utteranceRef.current = utterance;
+      // Long text is split into sentence-bounded chunks: Chrome's remote
+      // voices truncate long single utterances, and mobile engines can fail
+      // outright. The engine queues chunks in order; the final chunk's
+      // onend/onerror drives completion.
+      const chunks = chunkTextForSpeech(cleanedText);
 
       // Select voice: user preferred, then high quality natural voices, then English fallback
       const currentSettings = settingsRef.current;
@@ -140,46 +170,63 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
           ) || availableVoices.find((v) => v.lang.startsWith('en'));
       }
 
-      if (chosenVoice) {
-        utterance.voice = chosenVoice;
-      }
-
-      utterance.rate = currentSettings.rate;
-      utterance.pitch = currentSettings.pitch;
-      utterance.volume = currentSettings.volume;
-
-      utterance.onstart = () => {
-        if (currentUtteranceIdRef.current === utteranceId) {
-          setIsSpeaking(true);
-        }
+      const finish = () => {
+        setIsSpeaking(false);
+        onEnd?.();
       };
 
-      utterance.onend = () => {
-        if (currentUtteranceIdRef.current === utteranceId) {
-          setIsSpeaking(false);
-          onEnd?.();
+      chunks.forEach((chunk, index) => {
+        const isLast = index === chunks.length - 1;
+        const utterance = new SpeechSynthesisUtterance(chunk);
+        if (index === 0) {
+          utteranceRef.current = utterance;
         }
-      };
 
-      utterance.onerror = (event) => {
-        if (currentUtteranceIdRef.current === utteranceId) {
+        if (chosenVoice) {
+          utterance.voice = chosenVoice;
+        }
+        utterance.rate = currentSettings.rate;
+        utterance.pitch = currentSettings.pitch;
+        utterance.volume = currentSettings.volume;
+
+        utterance.onstart = () => {
+          if (currentUtteranceIdRef.current === utteranceId && index === 0) {
+            setIsSpeaking(true);
+          }
+        };
+
+        utterance.onerror = (event) => {
+          if (currentUtteranceIdRef.current !== utteranceId) return;
           if (event.error !== 'interrupted' && event.error !== 'canceled') {
             console.warn('Speech synthesis notice:', event.error);
           }
-          setIsSpeaking(false);
-          onEnd?.();
-        }
-      };
+          if (!isLast) {
+            // A failed middle chunk aborts the remaining queue
+            currentUtteranceIdRef.current++;
+            window.speechSynthesis.cancel();
+          }
+          finish();
+        };
 
-      try {
-        window.speechSynthesis.speak(utterance);
-      } catch (err) {
-        console.warn('Failed to initiate speech synthesis:', err);
-        if (currentUtteranceIdRef.current === utteranceId) {
-          setIsSpeaking(false);
-          onEnd?.();
+        if (isLast) {
+          utterance.onend = () => {
+            if (currentUtteranceIdRef.current === utteranceId) {
+              finish();
+            }
+          };
         }
-      }
+
+        try {
+          window.speechSynthesis.speak(utterance);
+        } catch (err) {
+          console.warn('Failed to initiate speech synthesis:', err);
+          if (currentUtteranceIdRef.current === utteranceId) {
+            currentUtteranceIdRef.current++;
+            window.speechSynthesis.cancel();
+            finish();
+          }
+        }
+      });
     },
     [isSupported]
   );

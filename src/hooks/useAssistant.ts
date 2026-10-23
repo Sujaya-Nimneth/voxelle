@@ -45,13 +45,18 @@ function loadMessagesFromStorage(): Message[] {
 function saveMessages(messages: Message[]) {
   if (typeof window === 'undefined') return;
   try {
-    // Strip heavy base64 image strings from persistent storage to prevent 5MB localStorage quota crash
-    const sanitized = messages.slice(-50).map((m) => {
-      if (m.image && m.image.length > 500) {
-        return { ...m, image: undefined };
-      }
-      return m;
-    });
+    // Strip heavy base64 image strings from persistent storage to prevent 5MB
+    // localStorage quota crash, and drop system error banners: they describe a
+    // transient failure and shouldn't resurface after a reload.
+    const sanitized = messages
+      .filter((m) => m.role !== 'system')
+      .slice(-50)
+      .map((m) => {
+        if (m.image && m.image.length > 500) {
+          return { ...m, image: undefined };
+        }
+        return m;
+      });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
   } catch (err) {
     console.warn('Could not persist messages to localStorage:', err);
@@ -483,11 +488,17 @@ export function useAssistant() {
 
   // Watch speech recognition transcript
   useEffect(() => {
-    if (transcript && !isNetworkBusyRef.current) {
-      const textToProcess = transcript;
+    if (!transcript) return;
+    if (isNetworkBusyRef.current) {
+      // A request is already in flight — drop the utterance rather than
+      // letting it linger and auto-dispatch unreviewed once the busy
+      // period ends.
       clearTranscript();
-      processMessage(textToProcess, uploadedImage);
+      return;
     }
+    const textToProcess = transcript;
+    clearTranscript();
+    processMessage(textToProcess, uploadedImage);
   }, [transcript, uploadedImage, clearTranscript, processMessage]);
 
   // Sync listening status

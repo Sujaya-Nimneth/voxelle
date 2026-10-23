@@ -32,8 +32,14 @@ export default function ImageDropzone({
 
       const reader = new FileReader();
       reader.onload = () => {
-        const result = reader.result as string;
-        onImageUpload(result);
+        if (typeof reader.result === 'string') {
+          onImageUpload(reader.result);
+        } else {
+          setErrorMessage('Could not read the image file. Please try again.');
+        }
+      };
+      reader.onerror = () => {
+        setErrorMessage('Could not read the image file. Please try again.');
       };
       reader.readAsDataURL(file);
     },
