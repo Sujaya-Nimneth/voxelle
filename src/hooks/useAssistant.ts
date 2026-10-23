@@ -4,7 +4,8 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useSpeechRecognition } from './useSpeechRecognition';
 import { useSpeechSynthesis } from './useSpeechSynthesis';
 import { optimizeImage } from '@/lib/imageUtils';
-import { buildHistoryForApi, isValidChatResponse } from '@/lib/chatResponse';
+import { buildHistoryForApi } from '@/lib/chatResponse';
+import { readChatStream } from '@/lib/chatStream';
 import type {
   AssistantStatus,
   Message,
@@ -52,10 +53,12 @@ function saveMessages(messages: Message[]) {
       .filter((m) => m.role !== 'system')
       .slice(-50)
       .map((m) => {
-        if (m.image && m.image.length > 500) {
-          return { ...m, image: undefined };
+        const copy = { ...m };
+        delete copy.isStreaming; // transient render flag, never persisted
+        if (copy.image && copy.image.length > 500) {
+          copy.image = undefined;
         }
-        return m;
+        return copy;
       });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
   } catch (err) {
@@ -299,10 +302,24 @@ export function useAssistant() {
       const controller = new AbortController();
       abortControllerRef.current = controller;
       let timedOut = false;
-      const timeoutId = setTimeout(() => {
-        timedOut = true;
-        controller.abort();
-      }, 35000); // 35s timeout
+      // Deadline is idle-based: any stream progress (headers, deltas, tools)
+      // re-arms it, so a slow but flowing stream isn't cut off at a flat 35s.
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const armTimeout = () => {
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          timedOut = true;
+          controller.abort();
+        }, 35000);
+      };
+      const disarmTimeout = () => {
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = null;
+      };
+      armTimeout();
+      // Streaming assistant message id — created once the stream opens; the
+      // catch path needs it to close out a partial shell on cancellation.
+      let assistantMessageId: string | null = null;
 
       let userMessage: Message;
 
@@ -311,7 +328,7 @@ export function useAssistant() {
         // duplicate; drop stale error banners while we're at it.
         const lastUser = [...messagesRef.current].reverse().find((m) => m.role === 'user');
         if (!lastUser) {
-          clearTimeout(timeoutId);
+          disarmTimeout();
           isNetworkBusyRef.current = false;
           return;
         }
@@ -356,26 +373,82 @@ export function useAssistant() {
           signal: controller.signal,
         });
 
-        clearTimeout(timeoutId);
-
         if (!res.ok) {
+          disarmTimeout();
           const errData = await res.json().catch(() => ({}));
           throw new Error(errData.error || `HTTP ${res.status}`);
         }
+        if (!res.body) {
+          disarmTimeout();
+          throw new Error('The assistant returned an empty stream.');
+        }
 
-        const raw: unknown = await res.json();
-        if (!isValidChatResponse(raw)) {
+        // Streaming reply: a shell assistant message is appended once and its
+        // content grows in place as deltas arrive (renders throttled).
+        assistantMessageId = generateId();
+        const shellId = assistantMessageId;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: shellId,
+            role: 'assistant',
+            content: '',
+            timestamp: Date.now(),
+            isStreaming: true,
+          },
+        ]);
+
+        let fullText = '';
+        let lastRenderAt = 0;
+        let receivedAnyEvent = false;
+        let streamErrorMessage: string | null = null;
+        const receivedToolCalls: ToolCall[] = [];
+
+        await readChatStream(res.body, {
+          onEvent: () => {
+            receivedAnyEvent = true;
+            armTimeout(); // progress resets the idle deadline
+          },
+          onMeta: (meta) => {
+            if (meta.provider) setActiveProvider(meta.provider);
+            if (meta.degraded !== undefined) setIsDegraded(meta.degraded);
+          },
+          onDelta: (text) => {
+            fullText += text;
+            const now = Date.now();
+            if (now - lastRenderAt >= 60) {
+              lastRenderAt = now;
+              const snapshot = fullText;
+              setMessages((prev) =>
+                prev.map((m) => (m.id === shellId ? { ...m, content: snapshot } : m))
+              );
+            }
+          },
+          onTool: (tc) => {
+            receivedToolCalls.push(tc);
+          },
+          onError: (message) => {
+            streamErrorMessage = message;
+          },
+        });
+        disarmTimeout();
+
+        if (!receivedAnyEvent) {
           throw new Error('Received an invalid response from the assistant service.');
         }
-        const data = raw;
 
-        if (data.provider) setActiveProvider(data.provider);
-        if (data.degraded !== undefined) setIsDegraded(data.degraded);
+        // A newer request or clearHistory took over mid-stream
+        if (requestGenerationRef.current !== generation) return;
+
+        if (streamErrorMessage && !fullText) {
+          setMessages((prev) => prev.filter((m) => m.id !== assistantMessageId));
+          throw new Error(streamErrorMessage);
+        }
 
         // Tool execution animations — cancellable: a newer request or
         // clearHistory during the staggered delays stops the sequence.
-        if (data.toolCalls && data.toolCalls.length > 0) {
-          for (const tc of data.toolCalls) {
+        if (receivedToolCalls.length > 0) {
+          for (const tc of receivedToolCalls) {
             if (requestGenerationRef.current !== generation) return;
 
             const toolEvent: ToolEvent = {
@@ -416,16 +489,17 @@ export function useAssistant() {
           }
         }
 
-        // Add assistant reply — only if this request still owns the conversation
+        // Finalize the reply — only if this request still owns the conversation
         if (requestGenerationRef.current !== generation) return;
 
-        const assistantMessage: Message = {
-          id: generateId(),
-          role: 'assistant',
-          content: data.response,
-          timestamp: Date.now(),
-        };
-        setMessages((prev) => [...prev, assistantMessage]);
+        const finalText = fullText || "I'm not sure how to respond to that. Could you try rephrasing?";
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId
+              ? { ...m, content: finalText, isStreaming: false }
+              : m
+          )
+        );
 
         if (image) {
           setUploadedImage(null);
@@ -434,10 +508,10 @@ export function useAssistant() {
         isNetworkBusyRef.current = false;
 
         // Voice playback if autoSpeak is enabled and TTS is supported
-        if (autoSpeak && ttsSupported && data.response) {
+        if (autoSpeak && ttsSupported && finalText) {
           setStatus('speaking');
           addSessionEvent('Voice response active', 'SYNTHESIS ENGINE ENGAGED', 'normal');
-          speak(data.response, () => {
+          speak(finalText, () => {
             setStatus('idle');
             addSessionEvent('Workspace nominal', 'AWAITING YOUR NEXT SIGNAL', 'warn');
           });
@@ -446,7 +520,18 @@ export function useAssistant() {
           addSessionEvent('Workspace nominal', 'AWAITING YOUR NEXT SIGNAL', 'warn');
         }
       } catch (err: unknown) {
-        clearTimeout(timeoutId);
+        disarmTimeout();
+
+        // Close out a partial streaming shell so a cancelled stream doesn't
+        // leave a message stuck in streaming state (drop it if still empty).
+        if (assistantMessageId) {
+          const shellId = assistantMessageId;
+          setMessages((prev) =>
+            prev
+              .map((m) => (m.id === shellId ? { ...m, isStreaming: false } : m))
+              .filter((m) => m.id !== shellId || m.content.length > 0)
+          );
+        }
 
         // A newer request superseded this one (or history was cleared): that
         // request owns the busy flag and status now — exit without clobbering.
@@ -456,7 +541,7 @@ export function useAssistant() {
 
         if (err instanceof Error && err.name === 'AbortError') {
           if (timedOut) {
-            console.warn('Assistant request timed out after 35s.');
+            console.warn('Assistant stream stalled and timed out after 35s without progress.');
             appendSystemError('The assistant took too long to respond. Please try again.');
             setStatus('idle');
             addSessionEvent('Signal timed out', 'RETRY AVAILABLE', 'warn');

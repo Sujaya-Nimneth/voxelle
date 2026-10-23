@@ -6,6 +6,7 @@ export interface Message {
   content: string;
   timestamp: number;
   image?: string; // base64 data URI
+  isStreaming?: boolean; // true while reply deltas are still arriving
 }
 
 export interface ToolCallArgs {
@@ -39,9 +40,10 @@ export interface ChatRequest {
   image?: string; // base64
 }
 
-export interface ChatResponse {
-  response: string;
-  toolCalls?: ToolCall[];
-  provider?: string;
-  degraded?: boolean;
-}
+// NDJSON stream events emitted by /api/chat, one JSON object per line.
+export type ChatStreamEvent =
+  | { type: 'meta'; provider: string; degraded?: boolean }
+  | { type: 'delta'; text: string }
+  | { type: 'tool'; toolCall: ToolCall }
+  | { type: 'error'; message: string }
+  | { type: 'done' };

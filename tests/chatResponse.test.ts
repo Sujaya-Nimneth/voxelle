@@ -1,44 +1,11 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { isValidChatResponse, buildHistoryForApi } from '../src/lib/chatResponse.ts';
+import { buildHistoryForApi } from '../src/lib/chatResponse.ts';
 import type { Message } from '../src/types/types.ts';
 
 function msg(partial: Partial<Message> & Pick<Message, 'id' | 'role'>): Message {
   return { content: 'hello', timestamp: 0, ...partial } as Message;
 }
-
-describe('isValidChatResponse', () => {
-  test('accepts a well-formed response', () => {
-    assert.ok(isValidChatResponse({ response: 'Hi there', provider: 'mock', degraded: false }));
-  });
-
-  test('accepts a response with tool calls', () => {
-    assert.ok(
-      isValidChatResponse({
-        response: 'Done',
-        toolCalls: [{ id: 't1', name: 'add_calendar_event', arguments: {}, status: 'pending' }],
-      })
-    );
-  });
-
-  test('rejects non-object payloads (HTML error pages, null, arrays)', () => {
-    assert.ok(!isValidChatResponse(null));
-    assert.ok(!isValidChatResponse('<html>oops</html>'));
-    assert.ok(!isValidChatResponse([1, 2, 3]));
-    assert.ok(!isValidChatResponse(undefined));
-  });
-
-  test('rejects missing or non-string response field', () => {
-    assert.ok(!isValidChatResponse({}));
-    assert.ok(!isValidChatResponse({ response: undefined }));
-    assert.ok(!isValidChatResponse({ response: 42 }));
-  });
-
-  test('rejects malformed toolCalls entries', () => {
-    assert.ok(!isValidChatResponse({ response: 'ok', toolCalls: 'nope' }));
-    assert.ok(!isValidChatResponse({ response: 'ok', toolCalls: [{ arguments: {} }] }));
-  });
-});
 
 describe('buildHistoryForApi', () => {
   test('appends the new user message and keeps only its image', () => {

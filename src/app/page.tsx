@@ -151,7 +151,7 @@ export default function Home() {
           {/* Conversation Log View */}
           <ChatLog
             messages={messages}
-            isProcessing={status === 'processing'}
+            isProcessing={status === 'processing' && !messages.some((m) => m.isStreaming)}
             isListening={isListening}
             interimTranscript={interimTranscript}
             onSelectSuggestion={sendTextMessage}

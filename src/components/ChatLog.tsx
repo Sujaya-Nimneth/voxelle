@@ -302,6 +302,12 @@ function ChatLog({
 
                   <div className="text-[#cdd8e8] text-[13px]">
                     <MarkdownMessage content={message.content} />
+                    {message.isStreaming && (
+                      <span
+                        className="inline-block w-[7px] h-[14px] ml-0.5 align-middle rounded-[1px] bg-[var(--cyan)] animate-pulse"
+                        aria-hidden="true"
+                      />
+                    )}
                   </div>
                 </div>
               </motion.div>

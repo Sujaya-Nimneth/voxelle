@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMockResponse, toolDefinitions } from './tools';
 import { sanitizeMessages } from './messageSanitizer';
-import type { Message, ToolCall, ToolCallArgs } from '@/types/types';
+import type { Message, ToolCall, ToolCallArgs, ChatStreamEvent } from '@/types/types';
 
 // ─── Configuration ───
 const AI_PROVIDER = (process.env.AI_PROVIDER || 'mock').toLowerCase();
@@ -50,6 +50,8 @@ const ALLOWED_MIME_TYPES = new Set([
   'image/gif',
 ]);
 const MAX_IMAGE_BASE64_LENGTH = 7 * 1024 * 1024; // ~5MB file size
+
+const FALLBACK_RESPONSE = "I'm not sure how to respond to that. Could you try rephrasing?";
 
 export async function POST(request: NextRequest) {
   try {
@@ -118,25 +120,25 @@ export async function POST(request: NextRequest) {
       validatedImage = image;
     }
 
-    // 3. Dispatch to Provider
+    // 3. Dispatch to provider — every path streams NDJSON events
     switch (AI_PROVIDER) {
       case 'gemini':
         if (!GEMINI_API_KEY) {
           console.warn('GEMINI_API_KEY is not configured. Falling back to mock engine.');
-          return handleMock(sanitizedMessages, true);
+          return streamNdjson(streamMock(sanitizedMessages, true));
         }
-        return await handleGemini(sanitizedMessages, validatedImage);
+        return streamNdjson(streamGemini(sanitizedMessages, validatedImage));
 
       case 'groq':
         if (!GROQ_API_KEY) {
           console.warn('GROQ_API_KEY is not configured. Falling back to mock engine.');
-          return handleMock(sanitizedMessages, true);
+          return streamNdjson(streamMock(sanitizedMessages, true));
         }
-        return await handleGroq(sanitizedMessages);
+        return streamNdjson(streamGroq(sanitizedMessages));
 
       case 'mock':
       default:
-        return handleMock(sanitizedMessages, false);
+        return streamNdjson(streamMock(sanitizedMessages, false));
     }
   } catch (error) {
     console.error('Chat API unexpected error:', error);
@@ -147,28 +149,131 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// ─── Mock Handler ───
-function handleMock(messages: Message[], degraded = false) {
-  const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user');
+// ─── NDJSON stream plumbing ───
 
-  if (!lastUserMessage) {
-    return NextResponse.json({
-      response: "Hello! I'm Voxelle, your ambient voice AI co-pilot. How can I help you?",
-      provider: 'mock',
-      degraded,
-    });
-  }
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-  const result = getMockResponse(lastUserMessage.content);
-  return NextResponse.json({
-    ...result,
-    provider: 'mock',
-    degraded,
+function streamNdjson(events: AsyncGenerator<ChatStreamEvent>): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        for await (const event of events) {
+          controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
+        }
+      } catch (err) {
+        console.error('Chat stream crashed:', err);
+        try {
+          controller.enqueue(
+            encoder.encode(
+              JSON.stringify({ type: 'error', message: 'The assistant stream failed.' }) + '\n'
+            )
+          );
+        } catch {
+          // Client already disconnected
+        }
+      } finally {
+        try {
+          controller.close();
+        } catch {
+          // Already closed
+        }
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Accel-Buffering': 'no', // don't let proxies buffer the stream
+    },
   });
 }
 
-// ─── Gemini Handler (Google AI Studio) ───
-async function handleGemini(messages: Message[], image?: string) {
+// Parses an upstream SSE body (`data: {json}` lines), yielding each payload.
+async function* parseSse(body: ReadableStream<Uint8Array>): AsyncGenerator<string> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let idx: number;
+      while ((idx = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, idx).trim();
+        buffer = buffer.slice(idx + 1);
+        if (!line.startsWith('data:')) continue;
+        const payload = line.slice(5).trim();
+        if (payload) yield payload;
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+// Contextual narrative when a tool was invoked with no accompanying text.
+function narrativeForToolCall(tc: ToolCall): string {
+  if (tc.name === 'add_calendar_event') {
+    return `I've scheduled "${tc.arguments.title}" for ${tc.arguments.date} at ${tc.arguments.time}.`;
+  }
+  if (tc.name === 'toggle_smart_home_device') {
+    return `I've turned ${tc.arguments.state} the ${tc.arguments.device_name}.`;
+  }
+  return `I've executed ${tc.name.replace(/_/g, ' ')}.`;
+}
+
+// ─── Mock Handler (demo mode / degraded fallback) ───
+
+async function* streamMock(
+  messages: Message[],
+  degraded: boolean
+): AsyncGenerator<ChatStreamEvent> {
+  const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user');
+
+  const result = lastUserMessage
+    ? getMockResponse(lastUserMessage.content)
+    : {
+        response:
+          "Hello! I'm Voxelle, your ambient voice AI co-pilot. How can I help you?",
+        toolCalls: undefined,
+      };
+
+  yield { type: 'meta', provider: 'mock', degraded };
+
+  if (result.toolCalls) {
+    for (const tc of result.toolCalls) {
+      yield { type: 'tool', toolCall: tc };
+    }
+  }
+
+  // Stream in small word groups so demo mode feels like live generation
+  const words = result.response.split(' ');
+  for (let i = 0; i < words.length; i += 3) {
+    const isLastGroup = i + 3 >= words.length;
+    yield {
+      type: 'delta',
+      text: words.slice(i, i + 3).join(' ') + (isLastGroup ? '' : ' '),
+    };
+    await sleep(30);
+  }
+
+  yield { type: 'done' };
+}
+
+// ─── Gemini Handler (Google AI Studio, SSE streaming) ───
+
+async function* streamGemini(
+  messages: Message[],
+  image?: string
+): AsyncGenerator<ChatStreamEvent> {
   try {
     // Image-only turns have empty text; don't emit empty text parts.
     const geminiMessages = messages.map((m) => ({
@@ -220,7 +325,7 @@ Keep your responses natural, conversational, and direct since they may be spoken
     };
 
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse`,
       {
         method: 'POST',
         headers: {
@@ -231,65 +336,70 @@ Keep your responses natural, conversational, and direct since they may be spoken
       }
     );
 
-    if (!res.ok) {
-      const errorText = await res.text();
+    if (!res.ok || !res.body) {
+      const errorText = await res.text().catch(() => '');
       console.error('Gemini API call failed:', res.status, errorText);
-      return handleMock(messages, true);
+      yield* streamMock(messages, true);
+      return;
     }
 
-    const data = await res.json();
-    const candidate = data.candidates?.[0];
+    yield { type: 'meta', provider: 'gemini', degraded: false };
 
-    if (!candidate?.content?.parts) {
-      return handleMock(messages, true);
-    }
-
-    let responseText = '';
+    let hasText = false;
     const toolCalls: ToolCall[] = [];
 
-    for (const part of candidate.content.parts) {
-      if (part.text) {
-        responseText += part.text;
+    for await (const payload of parseSse(res.body)) {
+      let chunk: {
+        candidates?: Array<{
+          content?: { parts?: Array<{ text?: string; functionCall?: { name: string; args?: unknown } }> };
+        }>;
+      };
+      try {
+        chunk = JSON.parse(payload);
+      } catch {
+        continue;
       }
-      if (part.functionCall) {
-        toolCalls.push({
-          id: `tool_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-          name: part.functionCall.name,
-          arguments: (part.functionCall.args || {}) as ToolCallArgs,
-          status: 'pending',
-        });
+
+      const parts = chunk.candidates?.[0]?.content?.parts;
+      if (!Array.isArray(parts)) continue;
+
+      for (const part of parts) {
+        if (typeof part.text === 'string' && part.text) {
+          hasText = true;
+          yield { type: 'delta', text: part.text };
+        } else if (part.functionCall) {
+          toolCalls.push({
+            id: `tool_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            name: part.functionCall.name,
+            arguments: (part.functionCall.args || {}) as ToolCallArgs,
+            status: 'pending',
+          });
+        }
       }
     }
 
-    // Contextual text fallback if tool was invoked with no narrative
-    if (toolCalls.length > 0 && !responseText.trim()) {
-      responseText = toolCalls
-        .map((tc) => {
-          if (tc.name === 'add_calendar_event') {
-            return `I've scheduled "${tc.arguments.title}" for ${tc.arguments.date} at ${tc.arguments.time}.`;
-          }
-          if (tc.name === 'toggle_smart_home_device') {
-            return `I've turned ${tc.arguments.state} the ${tc.arguments.device_name}.`;
-          }
-          return `I've executed ${tc.name.replace(/_/g, ' ')}.`;
-        })
-        .join(' ');
+    for (const tc of toolCalls) {
+      yield { type: 'tool', toolCall: tc };
     }
 
-    return NextResponse.json({
-      response: responseText || "I'm not sure how to respond to that. Could you try rephrasing?",
-      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-      provider: 'gemini',
-      degraded: false,
-    });
+    if (toolCalls.length > 0 && !hasText) {
+      yield { type: 'delta', text: toolCalls.map(narrativeForToolCall).join(' ') };
+    }
+
+    yield { type: 'done' };
   } catch (err) {
-    console.error('Gemini handler exception:', err);
-    return handleMock(messages, true);
+    console.error('Gemini stream exception:', err);
+    yield {
+      type: 'error',
+      message: 'The Gemini stream failed. Please try again.',
+    };
+    yield { type: 'done' };
   }
 }
 
-// ─── Groq Handler (Fast Inference) ───
-async function handleGroq(messages: Message[]) {
+// ─── Groq Handler (OpenAI-compatible SSE streaming) ───
+
+async function* streamGroq(messages: Message[]): AsyncGenerator<ChatStreamEvent> {
   try {
     const groqMessages = [
       {
@@ -326,71 +436,97 @@ async function handleGroq(messages: Message[]) {
         tool_choice: 'auto',
         temperature: 0.7,
         max_tokens: 512,
+        stream: true,
       }),
     });
 
-    if (!res.ok) {
-      const errorText = await res.text();
+    if (!res.ok || !res.body) {
+      const errorText = await res.text().catch(() => '');
       console.error('Groq API call failed:', res.status, errorText);
-      return handleMock(messages, true);
+      yield* streamMock(messages, true);
+      return;
     }
 
-    const data = await res.json();
-    const choice = data.choices?.[0];
+    yield { type: 'meta', provider: 'groq', degraded: false };
 
-    if (!choice?.message) {
-      return handleMock(messages, true);
-    }
+    let hasText = false;
+    // Groq fragments tool calls across chunks; aggregate by index until done.
+    const toolAccumulators = new Map<
+      number,
+      { id?: string; name?: string; args: string }
+    >();
 
-    const responseText = choice.message.content || '';
-    const toolCalls: ToolCall[] = [];
+    for await (const payload of parseSse(res.body)) {
+      if (payload === '[DONE]') break;
 
-    if (Array.isArray(choice.message.tool_calls)) {
-      for (const tc of choice.message.tool_calls) {
-        let parsedArgs: ToolCallArgs = {};
-        if (typeof tc.function?.arguments === 'string') {
-          try {
-            parsedArgs = JSON.parse(tc.function.arguments);
-          } catch {
-            parsedArgs = {};
-          }
-        } else if (tc.function?.arguments && typeof tc.function.arguments === 'object') {
-          parsedArgs = tc.function.arguments as ToolCallArgs;
+      let chunk: {
+        choices?: Array<{
+          delta?: {
+            content?: string;
+            tool_calls?: Array<{
+              index: number;
+              id?: string;
+              function?: { name?: string; arguments?: string };
+            }>;
+          };
+        }>;
+      };
+      try {
+        chunk = JSON.parse(payload);
+      } catch {
+        continue;
+      }
+
+      const delta = chunk.choices?.[0]?.delta;
+      if (!delta) continue;
+
+      if (typeof delta.content === 'string' && delta.content) {
+        hasText = true;
+        yield { type: 'delta', text: delta.content };
+      }
+
+      if (Array.isArray(delta.tool_calls)) {
+        for (const tc of delta.tool_calls) {
+          const acc = toolAccumulators.get(tc.index) ?? { args: '' };
+          if (tc.id) acc.id = tc.id;
+          if (tc.function?.name) acc.name = tc.function.name;
+          if (tc.function?.arguments) acc.args += tc.function.arguments;
+          toolAccumulators.set(tc.index, acc);
         }
-
-        toolCalls.push({
-          id: tc.id || `tool_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-          name: tc.function?.name || 'unknown_tool',
-          arguments: parsedArgs,
-          status: 'pending',
-        });
       }
     }
 
-    let finalResponse = responseText;
-    if (toolCalls.length > 0 && !finalResponse.trim()) {
-      finalResponse = toolCalls
-        .map((tc) => {
-          if (tc.name === 'add_calendar_event') {
-            return `I've scheduled "${tc.arguments.title}" for ${tc.arguments.date} at ${tc.arguments.time}.`;
-          }
-          if (tc.name === 'toggle_smart_home_device') {
-            return `I've turned ${tc.arguments.state} the ${tc.arguments.device_name}.`;
-          }
-          return `I've executed ${tc.name.replace(/_/g, ' ')}.`;
-        })
-        .join(' ');
+    const toolCalls: ToolCall[] = [];
+    for (const acc of toolAccumulators.values()) {
+      let parsedArgs: ToolCallArgs = {};
+      try {
+        parsedArgs = JSON.parse(acc.args || '{}') as ToolCallArgs;
+      } catch {
+        parsedArgs = {};
+      }
+      toolCalls.push({
+        id: acc.id || `tool_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        name: acc.name || 'unknown_tool',
+        arguments: parsedArgs,
+        status: 'pending',
+      });
     }
 
-    return NextResponse.json({
-      response:
-        finalResponse || "I'm not sure how to respond to that. Could you try rephrasing?",
-      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-      provider: 'groq',
-      degraded: false,
-    });
+    for (const tc of toolCalls) {
+      yield { type: 'tool', toolCall: tc };
+    }
+
+    if (toolCalls.length > 0 && !hasText) {
+      yield { type: 'delta', text: toolCalls.map(narrativeForToolCall).join(' ') };
+    }
+
+    yield { type: 'done' };
   } catch (err) {
-    console.error('Groq handler exception:', err);
-    return handleMock(messages, true);
+    console.error('Groq stream exception:', err);
+    yield {
+      type: 'error',
+      message: 'The Groq stream failed. Please try again.',
+    };
+    yield { type: 'done' };
   }
 }
