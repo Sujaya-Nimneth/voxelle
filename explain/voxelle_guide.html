@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Voxelle — Complete Project & Architecture Guide</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@600;700&display=swap');
+
+    :root {
+      --primary: #0284c7;
+      --primary-dark: #0369a1;
+      --cyan: #06b6d4;
+      --cyan-light: #ecfeff;
+      --violet: #7c3aed;
+      --violet-light: #f5f3ff;
+      --emerald: #059669;
+      --emerald-light: #ecfdf5;
+      --rose: #e11d48;
+      --dark: #0f172a;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --bg-alt: #f8fafc;
+      --card-bg: #ffffff;
+      --code-bg: #0f172a;
+      --code-text: #f8fafc;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: var(--text);
+      background-color: #ffffff;
+      line-height: 1.6;
+      font-size: 13.5px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Print rules */
+    @page {
+      size: A4 portrait;
+      margin: 16mm 14mm 16mm 14mm;
+      @bottom-right {
+        content: counter(page);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9px;
+        color: var(--text-muted);
+      }
+    }
+
+    @media print {
+      body {
+        background: transparent;
+      }
+      .page-break {
+        page-break-before: always;
+      }
+      .no-break {
+        page-break-inside: avoid;
+      }
+      h1, h2, h3 {
+        page-break-after: avoid;
+      }
+    }
+
+    .container {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 0 10px;
+    }
+
+    /* Cover Page */
+    .cover {
+      min-height: 92vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 40px 0 20px 0;
+      page-break-after: always;
+    }
+
+    .cover-top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-badge {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, #0284c7, #7c3aed);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 26px;
+      font-weight: 800;
+      box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3);
+    }
+
+    .cover-brand {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: var(--dark);
+    }
+
+    .cover-center {
+      margin: 60px 0;
+    }
+
+    .cover-tag {
+      display: inline-block;
+      padding: 4px 12px;
+      background: var(--cyan-light);
+      color: #0891b2;
+      border: 1px solid #cffafe;
+      border-radius: 20px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 20px;
+    }
+
+    .cover-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 42px;
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -1.2px;
+      color: var(--dark);
+      margin-bottom: 16px;
+    }
+
+    .cover-title span {
+      color: #0284c7;
+    }
+
+    .cover-subtitle {
+      font-size: 17px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      max-width: 650px;
+      margin-bottom: 30px;
+    }
+
+    .cover-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 30px;
+    }
+
+    .cover-stat {
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    .cover-stat-label {
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .cover-stat-value {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--dark);
+    }
+
+    .cover-footer {
+      border-top: 1px solid var(--border);
+      padding-top: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Headings */
+    h1 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--dark);
+      margin: 35px 0 16px 0;
+      letter-spacing: -0.6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .part-banner {
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      color: white;
+      padding: 14px 20px;
+      border-radius: 10px;
+      margin: 30px 0 20px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .part-banner h2 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0;
+      color: #f8fafc;
+      letter-spacing: -0.4px;
+    }
+
+    .part-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      background: rgba(255, 255, 255, 0.15);
+      padding: 4px 10px;
+      border-radius: 20px;
+      color: #38bdf8;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    h2 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 19px;
+      font-weight: 700;
+      color: var(--dark);
+      margin: 28px 0 12px 0;
+      letter-spacing: -0.4px;
+      border-bottom: 2px solid var(--bg-alt);
+      padding-bottom: 6px;
+    }
+
+    h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--dark);
+      margin: 20px 0 8px 0;
+    }
+
+    p {
+      margin-bottom: 12px;
+      color: #334155;
+    }
+
+    /* Pitch Boxes */
+    .pitch-card {
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--primary);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin-bottom: 16px;
+    }
+
+    .pitch-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .pitch-title {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--dark);
+    }
+
+    .pitch-time {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--primary);
+      background: #e0f2fe;
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+
+    .pitch-text {
+      font-style: italic;
+      color: #1e293b;
+      margin: 0;
+      line-height: 1.55;
+      font-size: 13px;
+    }
+
+    /* Callout Alert Boxes */
+    .callout {
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 16px 0;
+      display: flex;
+      gap: 12px;
+      font-size: 13px;
+    }
+
+    .callout-info {
+      background: var(--cyan-light);
+      border: 1px solid #a5f3fc;
+      color: #0e7490;
+    }
+
+    .callout-success {
+      background: var(--emerald-light);
+      border: 1px solid #a7f3d0;
+      color: #047857;
+    }
+
+    .callout-purple {
+      background: var(--violet-light);
+      border: 1px solid #ddd6fe;
+      color: #6d28d9;
+    }
+
+    .callout-icon {
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    /* Diagram / ASCII Art / Flowchart Box */
+    .diagram-box {
+      background: #090d16;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 18px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      line-height: 1.45;
+      overflow-x: auto;
+      margin: 16px 0;
+      border: 1px solid #1e293b;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .diagram-box .highlight {
+      color: #38bdf8;
+      font-weight: 600;
+    }
+
+    .diagram-box .accent {
+      color: #a78bfa;
+    }
+
+    .diagram-box .green {
+      color: #4ade80;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 12.5px;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 9px 12px;
+      text-align: left;
+    }
+
+    th {
+      background: var(--bg-alt);
+      font-weight: 600;
+      color: var(--dark);
+      font-size: 12px;
+    }
+
+    tr:nth-child(even) {
+      background: #fafafa;
+    }
+
+    /* Code blocks */
+    pre {
+      background: var(--code-bg);
+      color: var(--code-text);
+      padding: 14px 16px;
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11.5px;
+      line-height: 1.5;
+      overflow-x: auto;
+      margin: 14px 0;
+      border: 1px solid #1e293b;
+    }
+
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11.5px;
+      background: #f1f5f9;
+      color: #0f172a;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+    }
+
+    /* Q&A Accordion Style Cards */
+    .qa-card {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+
+    .qa-question {
+      font-weight: 700;
+      color: var(--dark);
+      font-size: 13.5px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .qa-q-badge {
+      background: #e0f2fe;
+      color: #0284c7;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .qa-answer {
+      color: #334155;
+      font-size: 13px;
+      line-height: 1.55;
+      padding-left: 28px;
+    }
+
+    /* Step flow */
+    .step-list {
+      list-style: none;
+      margin: 16px 0;
+    }
+
+    .step-item {
+      display: flex;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .step-num {
+      width: 26px;
+      height: 26px;
+      background: var(--dark);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .step-content {
+      flex: 1;
+    }
+
+    .step-title {
+      font-weight: 700;
+      color: var(--dark);
+      font-size: 13.5px;
+      margin-bottom: 3px;
+    }
+
+    .step-desc {
+      color: #475569;
+      font-size: 12.5px;
+      line-height: 1.5;
+    }
+
+    /* Feature tags */
+    .badge-pill {
+      display: inline-block;
+      font-size: 10.5px;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-weight: 500;
+      margin-right: 4px;
+    }
+    .badge-blue { background: #e0f2fe; color: #0369a1; }
+    .badge-purple { background: #f3e8ff; color: #7e22ce; }
+    .badge-green { background: #dcfce7; color: #15803d; }
+    .badge-gray { background: #f1f5f9; color: #475569; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- COVER PAGE -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div class="cover">
+      <div class="cover-top">
+        <div class="logo-badge">⌁</div>
+        <div class="cover-brand">VOXELLE</div>
+      </div>
+
+      <div class="cover-center">
+        <div class="cover-tag">ENGINEERING MASTERCLASS & BLUEPRINT</div>
+        <div class="cover-title">
+          Ambient Voice AI &<br>
+          <span>Command Center</span>
+        </div>
+        <p class="cover-subtitle">
+          How to present, explain, and master the architecture behind a voice-first, multimodal AI assistant equipped with real-time function calling, vision reasoning, and cyber-dark telemetry.
+        </p>
+
+        <div class="cover-grid">
+          <div class="cover-stat">
+            <div class="cover-stat-label">Core Runtime</div>
+            <div class="cover-stat-value">Next.js 16 (React 19)</div>
+          </div>
+          <div class="cover-stat">
+            <div class="cover-stat-label">Speech Engine</div>
+            <div class="cover-stat-value">Web Speech (STT + TTS)</div>
+          </div>
+          <div class="cover-stat">
+            <div class="cover-stat-label">LLM Providers</div>
+            <div class="cover-stat-value">Gemini 2.0 + Groq + Mock</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cover-footer">
+        <div><strong>Project:</strong> Voxelle / Multimodal Voice Assistant</div>
+        <div><strong>Target Audience:</strong> Engineers, Interviewers & Collaborators</div>
+        <div><strong>Version:</strong> Production v1.0 (2026)</div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- EXECUTIVE SUMMARY -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <h1>Executive Summary</h1>
+    <p>
+      <strong>Voxelle</strong> is a voice-native, multimodal AI assistant designed with a futuristic cyber-dark aesthetic. It transforms the conventional, passive chatbot experience into an active, ambient workspace command center. Users can talk naturally with sub-second feedback, attach visual diagrams for computer vision analysis, and command external digital and physical tools (e.g. scheduling Google/Outlook calendar events or controlling smart home devices) through intelligent LLM function calling.
+    </p>
+
+    <div class="callout callout-info no-break">
+      <div class="callout-icon">💡</div>
+      <div>
+        <strong>Two-Part Document Structure:</strong>
+        <br>
+        <strong>Part 1</strong> provides actionable elevator pitches, live demonstration guides, and interview strategies so you can clearly articulate what Voxelle is to anyone.
+        <br>
+        <strong>Part 2</strong> dives into the technical implementation, detailing the state machine, Web Speech integration, multi-provider LLM backend, and UI design system.
+      </div>
+    </div>
+
+    <hr style="border: none; border-top: 1px solid var(--border); margin: 30px 0;">
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- PART 1: HOW TO EXPLAIN VOXELLE TO ANOTHER PERSON -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div class="part-banner">
+      <h2>PART 1: How to Explain Voxelle to Another Person</h2>
+      <span class="part-badge">COMMUNICATION & DEMOS</span>
+    </div>
+
+    <h2>1.1 The Elevator Pitch (3 Delivery Tiers)</h2>
+    <p>
+      Select the pitch that matches the technical background of your audience and the time available:
+    </p>
+
+    <div class="pitch-card no-break">
+      <div class="pitch-header">
+        <span class="pitch-title">30-Second Casual Pitch (Recruiters & Non-Technical Peers)</span>
+        <span class="pitch-time">30 SECONDS</span>
+      </div>
+      <p class="pitch-text">
+        "Voxelle is an ambient, voice-controlled personal co-pilot for workspace productivity. Instead of constantly typing into a chat box, you just speak to it hands-free. Voxelle listens, speaks back with natural audio, analyzes images you drop on screen, and takes concrete actions behind the scenes—like automatically booking meetings on your calendar or turning off your office lights with live status indicators."
+      </p>
+    </div>
+
+    <div class="pitch-card no-break">
+      <div class="pitch-header">
+        <span class="pitch-title">2-Minute Product & Architecture Pitch (Hiring Managers & Leads)</span>
+        <span class="pitch-time">2 MINUTES</span>
+      </div>
+      <p class="pitch-text">
+        "Most AI chat apps are passive textboxes: you type, wait, and read. Voxelle transforms AI into an active command center. It bridges browser-native Web Speech recognition and synthesis with high-performance LLMs.<br><br>
+        When you speak, Voxelle processes your voice client-side with zero per-minute transcription costs, sends the query to a Next.js server route, and routes it to Google Gemini 2.0 Flash or Groq Llama 3.3. When you ask to book a meeting or adjust a smart device, the model emits structured function calls. Voxelle's UI receives these calls, animates a real-time execution card on the live activity rail, and confirms the action with synthesized voice.<br><br>
+        It also handles multimodal vision: you can drag-and-drop a screenshot or diagram, and the assistant reasons across both the image and your voice command simultaneously."
+      </p>
+    </div>
+
+    <div class="pitch-card no-break">
+      <div class="pitch-header">
+        <span class="pitch-title">Deep Technical Pitch (Staff Engineers & Architecture Reviews)</span>
+        <span class="pitch-time">DEEP DIVE</span>
+      </div>
+      <p class="pitch-text">
+        "Voxelle is an end-to-end multimodal orchestrator built on Next.js 16 (App Router) and React 19. It uses a custom finite state machine (idle ➔ listening ➔ processing ➔ speaking) that coordinates bidirectional audio with zero external streaming dependencies using the browser's Web Speech API.<br><br>
+        The backend API route implements a multi-provider router supporting Gemini 2.0 Flash (with inline base64 multimodal vision and tool declarations), Groq Cloud (with OpenAI function calling schemas), and a deterministic offline mock engine for zero-configuration testing. Client state is managed with synchronous ref guards to prevent race conditions during rapid speech cycles, and UI rendering uses Tailwind CSS v4, custom HSL design tokens, and Framer Motion spring physics."
+      </p>
+    </div>
+
+    <h2>1.2 The Problem Voxelle Solves</h2>
+    <p>
+      When explaining the rationale behind Voxelle, frame it around the three major flaws of modern AI interfaces:
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Current AI Limitation</th>
+          <th>The Friction It Causes</th>
+          <th>How Voxelle Solves It</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>High Interaction Friction</strong></td>
+          <td>Users must context-switch, focus a textbox, type out queries, and read paragraphs of text while trying to work.</td>
+          <td><strong>Zero-Click Voice Loop:</strong> Speak naturally, hands-free. Voxelle auto-detects sentence completion and reads responses aloud.</td>
+        </tr>
+        <tr>
+          <td><strong>Passive Text Generation</strong></td>
+          <td>Chatbots can only provide theoretical suggestions; they cannot trigger actions in your environment.</td>
+          <td><strong>Native Tool Calling:</strong> LLM schemas trigger real-time actions (`add_calendar_event`, `toggle_smart_home_device`).</td>
+        </tr>
+        <tr>
+          <td><strong>Lack of Workspace Telemetry</strong></td>
+          <td>No visibility into what tools are running, background state, or system health.</td>
+          <td><strong>Command Center Dashboard:</strong> 3-column cyber shell with live audio equalizer, event audit log, and running tool drawers.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="page-break"></div>
+
+    <h2>1.3 Mental Model & System Architecture</h2>
+    <p>
+      Use this architectural mental model to walk someone through the lifecycle of a user request:
+    </p>
+
+    <div class="diagram-box no-break">
+<span class="highlight">┌────────────────────────────────────────────────────────────────────────────────────────┐</span>
+<span class="highlight">│                                  CLIENT-SIDE BROWSER                                   │</span>
+<span class="highlight">│                                                                                        │</span>
+│  [Microphone Input]            [Image Dropzone]            [Text Composer]             │
+│          │                             │                          │                    │
+│          ▼                             ▼                          │                    │
+│   <span class="accent">useSpeechRecognition</span>         <span class="accent">FileReader (Base64)</span>                │                    │
+│    (Web Speech API)                    │                          │                    │
+│          │                             │                          │                    │
+│          └─────────────────────────────┼──────────────────────────┘                    │
+│                                        ▼                                               │
+│                        <span class="green">useAssistant State Machine</span>                              │
+│                    [IDLE] ➔ [LISTENING] ➔ [PROCESSING] ➔ [SPEAKING]                     │
+<span class="highlight">└────────────────────────────────────────┬───────────────────────────────────────────────┘</span>
+                                         │ HTTP POST /api/chat (JSON + Data URI)
+                                         ▼
+<span class="highlight">┌────────────────────────────────────────────────────────────────────────────────────────┐</span>
+<span class="highlight">│                             NEXT.JS 16 SERVER-SIDE RUNTIME                             │</span>
+<span class="highlight">│                                                                                        │</span>
+│                             <span class="accent">/api/chat/route.ts</span> Router                                  │
+│                                        │                                               │
+│             ┌──────────────────────────┼──────────────────────────┐                    │
+│             ▼                          ▼                          ▼                    │
+│    <span class="highlight">AI_PROVIDER=gemini</span>          <span class="highlight">AI_PROVIDER=groq</span>           <span class="highlight">AI_PROVIDER=mock</span>             │
+│    Google Gemini 2.0 Flash     Groq Cloud (Llama 3.3)     Deterministic Mock Engine    │
+│    - Multimodal Vision         - Low Latency Inference    - Zero API Keys Needed       │
+│    - Function Declarations     - OpenAI Function Calling  - Keyword Tool Extraction    │
+│             │                          │                          │                    │
+│             └──────────────────────────┼──────────────────────────┘                    │
+│                                        ▼                                               │
+│                   <span class="green">Returns: { response: string, toolCalls?: ToolCall[] }</span>                │
+<span class="highlight">└────────────────────────────────────────┬───────────────────────────────────────────────┘</span>
+                                         │ JSON Response Payload
+                                         ▼
+<span class="highlight">┌────────────────────────────────────────────────────────────────────────────────────────┐</span>
+<span class="highlight">│                                    CLIENT HYDRATION                                    │</span>
+<span class="highlight">│                                                                                        │</span>
+│  1. <span class="accent">ChatLog.tsx:</span> Renders user & assistant messages with glassmorphic cards.           │
+│  2. <span class="green">Tool Execution:</span> Tool cards transition: [Pending] ➔ [Executing] ➔ [Completed].     │
+│  3. <span class="highlight">ActivityRail.tsx:</span> Appends audit log to encrypted session stream.                  │
+│  4. <span class="accent">useSpeechSynthesis:</span> Speaks natural voice response through selected system voice.  │
+<span class="highlight">└────────────────────────────────────────────────────────────────────────────────────────┘</span>
+    </div>
+
+    <h2>1.4 Step-by-Step Live Demo Script</h2>
+    <p>
+      When giving a live demonstration, follow this 4-step sequence to systematically showcase voice input, tool execution, smart home integration, and multimodal vision:
+    </p>
+
+    <div class="step-list">
+      <div class="step-item no-break">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <div class="step-title">The Ambient Voice Conversation</div>
+          <div class="step-desc">
+            Tap the glowing cyan microphone button and say: <em>"Hey Voxelle, brief me on today."</em><br>
+            <strong>What to highlight:</strong> The microphone ripples with concentric cyan rings, the equalizer bars in the right rail animate to your voice pitch, and Speech-to-Text automatically stops upon silence. Voxelle then synthesizes an audible morning briefing.
+          </div>
+        </div>
+      </div>
+
+      <div class="step-item no-break">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <div class="step-title">Intelligent Calendar Tool Calling</div>
+          <div class="step-desc">
+            Speak or type: <em>"Schedule an architecture review meeting tomorrow at 3:00 PM."</em><br>
+            <strong>What to highlight:</strong> The LLM recognizes intent and generates a structured tool call. An execution card appears with a purple shimmer progress bar in the Activity Rail, simulates network dispatch, and completes with a green checkmark.
+          </div>
+        </div>
+      </div>
+
+      <div class="step-item no-break">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <div class="step-title">Hardware & Smart Home Device Automation</div>
+          <div class="step-desc">
+            Speak or type: <em>"Turn off the living room lights."</em><br>
+            <strong>What to highlight:</strong> The assistant invokes <code>toggle_smart_home_device</code> with <code>state: 'off'</code>, appends a TLS 1.3 audit entry in the session telemetry, and vocally confirms the command.
+          </div>
+        </div>
+      </div>
+
+      <div class="step-item no-break">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <div class="step-title">Multimodal Vision Reasoning</div>
+          <div class="step-desc">
+            Click the <code>＋</code> icon in the composer, drop in an architectural diagram or photo, and ask: <em>"Explain what you see in this image."</em><br>
+            <strong>What to highlight:</strong> The image is converted client-side into base64, transmitted inline to Gemini 2.0 Flash, and analyzed alongside your voice prompt in a single multimodal inference pass.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h2>1.5 Technical Interview Q&A Cheatsheet</h2>
+    <p>
+      Use these prepared responses for technical interviews or peer code reviews:
+    </p>
+
+    <div class="qa-card no-break">
+      <div class="qa-question">
+        <span class="qa-q-badge">Q1</span>
+        <span>Why did you choose the browser Web Speech API over Whisper or ElevenLabs?</span>
+      </div>
+      <div class="qa-answer">
+        "Two main reasons: <strong>latency</strong> and <strong>accessibility</strong>. Cloud speech APIs require uploading audio buffers over WebSockets or HTTP, introducing network roundtrips, encoding overhead, and continuous API costs. Web Speech runs natively on the client's audio hardware with zero latency and zero billing. Plus, it allows any reviewer to run the repository with zero configuration. Because the voice layer is isolated in custom React hooks (<code>useSpeechRecognition</code> and <code>useSpeechSynthesis</code>), swapping to a server-side WebSocket stream or WebRTC to Gemini Live is a clean drop-in replacement."
+      </div>
+    </div>
+
+    <div class="qa-card no-break">
+      <div class="qa-question">
+        <span class="qa-q-badge">Q2</span>
+        <span>How do you handle Next.js SSR hydration mismatches with browser-only APIs?</span>
+      </div>
+      <div class="qa-answer">
+        "APIs like <code>window.SpeechRecognition</code> and <code>window.localStorage</code> do not exist on the server. If a component attempts to read them during server-side pre-rendering, Next.js throws a hydration mismatch error. We resolved this through three safeguards:
+        <br>1. Checking <code>typeof window === 'undefined'</code> guards.
+        <br>2. Initializing component state with safe defaults, then hydrating from <code>localStorage</code> inside a client-side <code>useEffect</code> with a <code>hydrated</code> boolean flag.
+        <br>3. Adding <code>suppressHydrationWarning</code> to the RootLayout body."
+      </div>
+    </div>
+
+    <div class="qa-card no-break">
+      <div class="qa-question">
+        <span class="qa-q-badge">Q3</span>
+        <span>How does Voxelle prevent acoustic feedback loops between STT and TTS?</span>
+      </div>
+      <div class="qa-answer">
+        "A common bug in voice assistants is the microphone picking up the speaker's own voice, creating an infinite conversation loop. In <code>useAssistant.ts</code>, we enforce strict state transitions and synchronous execution locks:
+        <br>1. When the assistant enters the <code>speaking</code> state, the speech recognition instance is aborted.
+        <br>2. When the user initiates voice input via <code>startListening()</code>, any active speech synthesis is immediately halted via <code>window.speechSynthesis.cancel()</code>.
+        <br>3. A synchronous <code>processingRef.current</code> boolean guard prevents duplicate submissions while async requests are in flight."
+      </div>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- PART 2: HOW VOXELLE WAS BUILT -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div class="part-banner">
+      <h2>PART 2: How Voxelle Was Built (Engineering Deep Dive)</h2>
+      <span class="part-badge">CODE ARCHITECTURE</span>
+    </div>
+
+    <h2>2.1 Foundational Architecture & Tech Stack</h2>
+    <p>
+      Every architectural decision in Voxelle was selected to optimize performance, maintainability, and visual fidelity:
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Component</th>
+          <th>Technology</th>
+          <th>Technical Rationale</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Framework</strong></td>
+          <td>Next.js 16 (App Router)</td>
+          <td>Unified full-stack architecture with secure server-side API routes, zero API key leakage, and fast compilation.</td>
+        </tr>
+        <tr>
+          <td><strong>UI Runtime</strong></td>
+          <td>React 19</td>
+          <td>Leverages concurrent React features, modern hook composition, and optimized reconciliation.</td>
+        </tr>
+        <tr>
+          <td><strong>Styling</strong></td>
+          <td>Tailwind CSS v4</td>
+          <td>Modern <code>@import "tailwindcss"</code> and <code>@theme inline</code> CSS variable tokens without legacy config files.</td>
+        </tr>
+        <tr>
+          <td><strong>Animations</strong></td>
+          <td>Framer Motion 12</td>
+          <td>Spring physics, layout animations (e.g. tool cards appearing and collapsing), and <code>AnimatePresence</code> exit transitions.</td>
+        </tr>
+        <tr>
+          <td><strong>Audio Stack</strong></td>
+          <td>Web Speech API</td>
+          <td>Zero-dependency, hardware-accelerated speech recognition and voice synthesis.</td>
+        </tr>
+        <tr>
+          <td><strong>File Processing</strong></td>
+          <td><code>react-dropzone</code> + FileReader</td>
+          <td>Client-side Drag-and-drop ingestion with direct Base64 Data URI encoding (no temporary cloud buckets needed).</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>2.2 The Central Orchestration Brain (`useAssistant.ts`)</h2>
+    <p>
+      Located at <code>src/hooks/useAssistant.ts</code>, this 400-line hook serves as the application's central nervous system. It connects the user interface, speech input, speech output, backend API, tool lifecycle, and persistent storage.
+    </p>
+
+    <h3>The 4-State Finite State Machine</h3>
+    <p>
+      The assistant transitions through four distinct states, represented by the union type <code>AssistantStatus = 'idle' | 'listening' | 'processing' | 'speaking'</code>:
+    </p>
+
+    <div class="diagram-box no-break">
+   ┌───────────────────────────────────────────────────────────┐
+   │                          IDLE                             │
+   └───────────────┬───────────────────────────▲───────────────┘
+                   │ User taps Mic             │ TTS completes or
+                   │ or speech detected        │ Mute clicked
+                   ▼                           │
+   ┌───────────────────────────┐   TTS Voice   │
+   │         LISTENING         │   Response    │
+   └───────────────┬───────────┘               │
+                   │ Final transcript detected │
+                   ▼                           │
+   ┌───────────────────────────┐   API JSON    │
+   │        PROCESSING         │───────────────┤
+   └───────────────┬───────────┘   (No audio)  │
+                   │ API returns text + TTS    │
+                   ▼                           │
+   ┌───────────────────────────┐               │
+   │         SPEAKING          ├───────────────┘
+   └───────────────────────────┘
+    </div>
+
+    <h3>Synchronous Concurrency Protection with React Refs</h3>
+    <p>
+      In React, <code>useState</code> updates are queued asynchronously. Because browser speech events (like <code>onresult</code> followed immediately by <code>onend</code>) can fire milliseconds apart, using standard state flags alone leads to duplicate API submissions.
+    </p>
+    <p>
+      To resolve this, <code>useAssistant</code> pairs state with synchronous <code>useRef</code> locks:
+    </p>
+
+    <pre><code>// Synchronous locks to prevent double-dispatch race conditions
+const statusRef = useRef&lt;AssistantStatus&gt;('idle');
+const processingRef = useRef(false);
+
+const processMessage = useCallback(async (userText: string, image?: string | null) =&gt; {
+  // Guard clause: immediately reject duplicate triggers synchronously
+  if (processingRef.current) return;
+  processingRef.current = true;
+
+  try {
+    setStatus('processing');
+    // ... API call, tool execution, TTS triggering ...
+  } finally {
+    processingRef.current = false;
+  }
+}, [/* dependencies */]);</code></pre>
+
+    <h2>2.3 Voice Engineering Pipeline (STT & TTS)</h2>
+
+    <h3>1. Speech-to-Text: `useSpeechRecognition.ts`</h3>
+    <p>
+      This custom hook encapsulates browser voice recognition. Key engineering considerations include:
+    </p>
+    <ul style="margin-left: 20px; margin-bottom: 12px;">
+      <li><strong>TypeScript Global Interface Augmentation:</strong> Web Speech types are not in standard TypeScript DOM declarations. The hook defines custom interfaces for <code>SpeechRecognitionInstance</code>, <code>SpeechRecognitionEvent</code>, and extends the <code>Window</code> interface.</li>
+      <li><strong>Automatic Intent Submission on Final Transcript:</strong> The hook listens for <code>result.isFinal</code> and extracts the trimmed transcript, automatically waking the processing pipeline without requiring the user to press a submit button.</li>
+      <li><strong>Error Classification:</strong> Distinguishes intentional user cancellations (<code>aborted</code>) from actual hardware issues (<code>not-allowed</code>, <code>audio-capture</code>, <code>no-speech</code>).</li>
+    </ul>
+
+    <h3>2. Text-to-Speech: `useSpeechSynthesis.ts`</h3>
+    <p>
+      Wrapping <code>window.speechSynthesis</code>, this hook manages vocal output:
+    </p>
+    <ul style="margin-left: 20px; margin-bottom: 12px;">
+      <li><strong>Cross-Browser Voice Population:</strong> Chrome loads voices asynchronously and triggers a <code>voiceschanged</code> event, while Safari loads them immediately. The hook implements a dual-check listener to guarantee available voices are always registered.</li>
+      <li><strong>Natural Voice Heuristics:</strong> Automatically searches available voices for high-quality accents (e.g. "Google Natural", "Samantha", "Daniel", "Serena") before falling back to default system engines.</li>
+      <li><strong>Clean Audio Interruption:</strong> Calls <code>window.speechSynthesis.cancel()</code> before any new utterance, guaranteeing audio tracks never collide or overlap.</li>
+    </ul>
+
+    <div class="page-break"></div>
+
+    <h2>2.4 Multi-Provider AI Engine & Function Calling (`/api/chat`)</h2>
+    <p>
+      The server route at <code>src/app/api/chat/route.ts</code> inspects the <code>AI_PROVIDER</code> environment variable to dynamically delegate work:
+    </p>
+
+    <div class="pitch-card no-break">
+      <div class="pitch-title">Provider 1: Google Gemini 2.0 Flash (`AI_PROVIDER=gemini`)</div>
+      <p class="pitch-text">
+        Directly targets the Google Generative Language API endpoint. It formats conversation history into Gemini's <code>user</code> and <code>model</code> roles, injects base64 image data into <code>inline_data</code> parts, and passes <code>toolDefinitions</code> into <code>tools.function_declarations</code>.
+      </p>
+    </div>
+
+    <div class="pitch-card no-break">
+      <div class="pitch-title">Provider 2: Groq Cloud Llama 3.3 (`AI_PROVIDER=groq`)</div>
+      <p class="pitch-text">
+        Connects to Groq's low-latency OpenAI-compatible endpoint using <code>llama-3.3-70b-versatile</code>. It translates tool definitions into standard OpenAI JSON function schemas and parses returned <code>tool_calls</code>.
+      </p>
+    </div>
+
+    <div class="pitch-card no-break">
+      <div class="pitch-title">Provider 3: Offline Mock Engine (`AI_PROVIDER=mock`)</div>
+      <p class="pitch-text">
+        The default zero-configuration mode. Uses intelligent keyword pattern matching (in <code>src/app/api/chat/tools.ts</code>) to match user intent against calendar bookings, smart home controls, and ambient workspace queries—enabling full demonstrations without any API keys.
+      </p>
+    </div>
+
+    <h3>The Tool Schema Definition</h3>
+    <p>
+      In <code>src/app/api/chat/tools.ts</code>, tools are defined in a clean, universal format:
+    </p>
+
+    <pre><code>export const toolDefinitions = [
+  {
+    name: 'add_calendar_event',
+    description: 'Adds a new event to the user\'s calendar...',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        title: { type: 'STRING', description: 'Title of the event' },
+        time: { type: 'STRING', description: 'Time (e.g. "3:00 PM")' },
+        date: { type: 'STRING', description: 'Date (e.g. "tomorrow", "2026-09-18")' },
+      },
+      required: ['title', 'time', 'date'],
+    },
+  },
+  {
+    name: 'toggle_smart_home_device',
+    description: 'Turns a smart home device on or off...',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        device_name: { type: 'STRING', description: 'Device name (e.g. "living room lights")' },
+        state: { type: 'STRING', enum: ['on', 'off'], description: 'Desired power state' },
+      },
+      required: ['device_name', 'state'],
+    },
+  },
+];</code></pre>
+
+    <h2>2.5 Multimodal Vision Pipeline (`ImageDropzone.tsx`)</h2>
+    <p>
+      The image dropzone component allows users to attach diagrams, UI mockups, or photographs:
+    </p>
+    <div class="step-list">
+      <div class="step-item no-break">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <div class="step-title">File Ingestion</div>
+          <div class="step-desc">
+            <code>react-dropzone</code> validates drag-and-drop or picker events against allowed image MIME types (PNG, JPG, WEBP, GIF) with a 10MB file limit.
+          </div>
+        </div>
+      </div>
+      <div class="step-item no-break">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <div class="step-title">Client-Side Base64 Conversion</div>
+          <div class="step-desc">
+            The browser's native <code>FileReader.readAsDataURL(file)</code> encodes the file into a base64 Data URI, bypassing the need for temporary cloud storage buckets.
+          </div>
+        </div>
+      </div>
+      <div class="step-item no-break">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <div class="step-title">Multimodal Payload Construction</div>
+          <div class="step-desc">
+            In <code>route.ts</code>, a regular expression extracts the MIME type and raw base64 data string, constructing an <code>inline_data</code> part for Gemini 2.0 Flash to process in parallel with the user's voice prompt.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h2>2.6 Frontend Architecture & Cyber-Dark UI Design</h2>
+    <p>
+      Voxelle's UI is organized into a 3-column cyber shell inspired by command center telemetry:
+    </p>
+    <ul style="margin-left: 20px; margin-bottom: 14px;">
+      <li><strong>Left Sidebar (262px):</strong> Workspace navigation, recent conversation signals, and modal triggers for connected tools and automations.</li>
+      <li><strong>Center Command Center (Flexible):</strong> Status badges, chat message stream, prompt suggestions, and the floating cyber composer.</li>
+      <li><strong>Right Activity Rail (316px):</strong> Real-time audio waveform equalizer, live tool execution cards with spring transitions, and encrypted session audit logs.</li>
+    </ul>
+
+    <div class="callout callout-purple no-break">
+      <div class="callout-icon">🎨</div>
+      <div>
+        <strong>Tailwind CSS v4 Design Tokens:</strong>
+        Defined in <code>src/app/globals.css</code> using the modern <code>@theme inline</code> specification. Color variables like <code>--cyan: #35e6ff</code>, <code>--violet: #926cff</code>, and <code>--ink: #080b14</code> provide cohesive neon glow effects across frosted glass cards with <code>backdrop-filter: blur(20px)</code>.
+      </div>
+    </div>
+
+    <h2>2.7 Reliability, Resilience & Edge Cases</h2>
+    <p>
+      Several production resilience mechanisms are built directly into Voxelle:
+    </p>
+    <ul style="margin-left: 20px; margin-bottom: 14px;">
+      <li><strong>Diagnostic Warning Overlay (<code>PermissionWarning.tsx</code>):</strong> Automatically alerts users if microphone permissions were denied or if the browser lacks Web Speech support, providing direct remediation instructions.</li>
+      <li><strong>LocalStorage Synchronization:</strong> Chat history and recent signals automatically persist in the browser and safely hydrate without causing SSR mismatches.</li>
+      <li><strong>Dynamic Tool Timeout & Auto-Dismissal:</strong> Tool execution cards automatically display a progress shimmer bar for 1.2s during execution, switch to a completed state, and self-dismiss after 6 seconds to keep the workspace clean.</li>
+    </ul>
+
+    <hr style="border: none; border-top: 1px solid var(--border); margin: 30px 0;">
+
+    <div style="text-align: center; color: var(--text-muted); font-size: 11px; padding-bottom: 20px;">
+      Generated for Voxelle — Ambient Voice AI & Command Center • 2026
+    </div>
+
+  </div>
+
+</body>
+</html>
