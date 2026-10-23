@@ -30,7 +30,6 @@ export default function Home() {
     dismissToolEvent,
     stopSpeaking,
     interimTranscript,
-    audioFrequencyLevels,
     autoSpeak,
     toggleAutoSpeak,
     activeProvider,
@@ -170,7 +169,6 @@ export default function Home() {
           status={status}
           sessionEvents={sessionEvents}
           toolEvents={toolEvents}
-          audioFrequencyLevels={audioFrequencyLevels}
           onDismissToolEvent={dismissToolEvent}
           isOpenMobile={isMobileRailOpen}
           onCloseMobile={() => setIsMobileRailOpen(false)}

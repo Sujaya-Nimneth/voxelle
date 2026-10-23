@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect, useSyncExternalStore } from 'react';
+import { audioLevelsStore, AUDIO_BAND_COUNT } from '@/lib/audioLevels';
 
 // Web Speech API type declarations
 interface SpeechRecognitionEvent extends Event {
@@ -64,7 +65,6 @@ interface UseSpeechRecognitionReturn {
   clearTranscript: () => void;
   error: string | null;
   isSupported: boolean;
-  audioFrequencyLevels: number[];
 }
 
 function emptySubscribe() {
@@ -87,9 +87,6 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
   const [interimTranscript, setInterimTranscript] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [audioFrequencyLevels, setAudioFrequencyLevels] = useState<number[]>(() =>
-    new Array(11).fill(0.12)
-  );
 
   const isSupported = useSyncExternalStore(
     emptySubscribe,
@@ -105,8 +102,13 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number | null>(null);
+  // Generation token: bumped whenever the analyser is stopped or restarted.
+  // Async getUserMedia continuations compare against it so a stop that raced
+  // the permission prompt can't reinstate a leaked stream or rAF loop.
+  const analyserGenerationRef = useRef(0);
 
   const stopAudioAnalyser = useCallback(() => {
+    analyserGenerationRef.current++;
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current);
       animFrameRef.current = null;
@@ -120,13 +122,19 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
       audioContextRef.current = null;
     }
     analyserRef.current = null;
-    setAudioFrequencyLevels(new Array(11).fill(0.12));
+    audioLevelsStore.reset();
   }, []);
 
   const startAudioAnalyser = useCallback(async () => {
     try {
       if (!navigator.mediaDevices?.getUserMedia) return;
+      const generation = ++analyserGenerationRef.current;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (analyserGenerationRef.current !== generation) {
+        // Stopped while the permission prompt was pending — abandon this stream.
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       mediaStreamRef.current = stream;
 
       const AudioCtx =
@@ -145,11 +153,11 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
       const updateMeter = () => {
-        if (!analyserRef.current) return;
+        if (analyserGenerationRef.current !== generation || !analyserRef.current) return;
         analyserRef.current.getByteFrequencyData(dataArray);
 
-        // Map into 11 distinct frequency bands
-        const bands = 11;
+        // Map into distinct frequency bands
+        const bands = AUDIO_BAND_COUNT;
         const levels: number[] = [];
         const step = Math.max(1, Math.floor(dataArray.length / bands));
 
@@ -162,7 +170,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
           levels.push(Math.max(0.08, Math.min(1, avg * 1.5)));
         }
 
-        setAudioFrequencyLevels(levels);
+        audioLevelsStore.setLevels(levels);
         animFrameRef.current = requestAnimationFrame(updateMeter);
       };
 
@@ -210,7 +218,13 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      if (event.error === 'aborted') return;
+      if (event.error === 'aborted') {
+        // Deliberate abort (new session or unmount): still release the mic
+        // stream and meter loop; just don't surface it as a user-facing error.
+        stopAudioAnalyser();
+        setIsListening(false);
+        return;
+      }
 
       console.error('Speech recognition error:', event.error);
       switch (event.error) {
@@ -292,6 +306,5 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     clearTranscript,
     error,
     isSupported,
-    audioFrequencyLevels,
   };
 }

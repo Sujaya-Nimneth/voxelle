@@ -131,7 +131,6 @@ export function useAssistant() {
     clearTranscript,
     error: sttError,
     isSupported: sttSupported,
-    audioFrequencyLevels,
   } = useSpeechRecognition();
 
   const {
@@ -511,7 +510,6 @@ export function useAssistant() {
     dismissToolEvent,
     stopSpeaking,
     interimTranscript,
-    audioFrequencyLevels,
     autoSpeak,
     toggleAutoSpeak,
     activeProvider,

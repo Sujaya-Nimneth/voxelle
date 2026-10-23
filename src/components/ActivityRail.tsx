@@ -2,6 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Calendar, Home, CheckCircle2, ShieldCheck } from 'lucide-react';
+import AudioMeter from './AudioMeter';
 import type { AssistantStatus, SessionEvent, ToolEvent } from '@/types/types';
 
 interface ActivityRailProps {
@@ -11,10 +12,7 @@ interface ActivityRailProps {
   onDismissToolEvent: (id: string) => void;
   isOpenMobile?: boolean;
   onCloseMobile?: () => void;
-  audioFrequencyLevels?: number[];
 }
-
-const BAR_BASE_HEIGHTS = [11, 21, 31, 16, 39, 25, 17, 29, 12, 20, 9];
 
 export default function ActivityRail({
   status,
@@ -23,13 +21,7 @@ export default function ActivityRail({
   onDismissToolEvent,
   isOpenMobile = false,
   onCloseMobile,
-  audioFrequencyLevels,
 }: ActivityRailProps) {
-  const isListening = status === 'listening';
-  const isSpeaking = status === 'speaking';
-  const isProcessing = status === 'processing';
-  const isActive = isListening || isSpeaking || isProcessing;
-
   const getMeterStatusLabel = () => {
     switch (status) {
       case 'listening':
@@ -92,34 +84,7 @@ export default function ActivityRail({
             </span>
           </div>
 
-          <div className="h-[44px] flex items-end justify-between gap-[4px] px-1 pb-1">
-            {BAR_BASE_HEIGHTS.map((baseH, idx) => {
-              // Real frequency level if microphone is live; otherwise responsive ambient wave
-              const realLevel = audioFrequencyLevels?.[idx];
-              let barHeight = baseH;
-
-              if (isListening && realLevel !== undefined) {
-                barHeight = Math.max(6, Math.min(42, Math.round(realLevel * 42)));
-              } else if (isSpeaking) {
-                barHeight = Math.max(8, (baseH * (1 + ((idx % 3) * 0.4))) % 40);
-              } else if (isProcessing) {
-                barHeight = Math.max(8, (baseH * 0.8));
-              }
-
-              return (
-                <div
-                  key={idx}
-                  className="w-[5px] rounded-full transition-all duration-100 ease-out"
-                  style={{
-                    height: `${barHeight}px`,
-                    background: 'linear-gradient(to top, var(--violet), var(--cyan))',
-                    opacity: isActive ? 0.95 : 0.5,
-                    boxShadow: isActive ? '0 0 8px rgba(53, 230, 255, 0.3)' : 'none',
-                  }}
-                />
-              );
-            })}
-          </div>
+          <AudioMeter status={status} />
         </div>
 
         {/* Tool Execution Cards */}
