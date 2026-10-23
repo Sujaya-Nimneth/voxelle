@@ -19,6 +19,7 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import Modal from './Modal';
+import { toolDefinitions } from '@/app/api/chat/tools';
 import type { SpeechSettings } from '@/hooks/useSpeechSynthesis';
 
 interface SidebarProps {
@@ -160,7 +161,7 @@ function Sidebar({
             <Cpu className="w-4 h-4 text-cyan flex-shrink-0" />
             <span>Connected tools</span>
             <span className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan border border-cyan-500/20">
-              8
+              {toolDefinitions.length}
             </span>
           </button>
         </nav>
@@ -199,7 +200,7 @@ function Sidebar({
               Personal workspace
             </div>
             <span className="block text-[10px] text-dim font-mono truncate">
-              Pro · 8 tools online
+              {`Pro · ${toolDefinitions.length} tools online`}
             </span>
           </div>
         </div>

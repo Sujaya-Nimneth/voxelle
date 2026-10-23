@@ -30,6 +30,7 @@ export default function Home() {
     clearHistory,
     dismissToolEvent,
     stopSpeaking,
+    speakMessage,
     interimTranscript,
     autoSpeak,
     toggleAutoSpeak,
@@ -61,13 +62,10 @@ export default function Home() {
   // re-render on every parent render.
   const handleCloseSidebarMobile = useCallback(() => setIsMobileSidebarOpen(false), []);
   const handleCloseRailMobile = useCallback(() => setIsMobileRailOpen(false), []);
-  const handleSpeakText = useCallback(
-    (text: string) => sendTextMessage(`Repeat: ${text}`),
-    [sendTextMessage]
-  );
+  const handleSpeakText = useCallback((text: string) => speakMessage(text), [speakMessage]);
 
   return (
-    <div className="min-h-screen relative overflow-hidden cyber-bg selection:bg-cyan-500/20 selection:text-cyan-200">
+    <div className="min-h-screen relative overflow-hidden cyber-bg">
       {/* Background Cyber Grid */}
       <div className="cyber-grid" />
 
@@ -120,6 +118,7 @@ export default function Home() {
                 onClick={clearHistory}
                 className="hidden sm:flex items-center gap-1.5 p-2 rounded-lg text-muted hover:text-white hover:bg-white/5 transition-colors text-xs font-mono cursor-pointer"
                 title="Reset session history"
+                aria-label="Reset session history"
               >
                 <Trash2 className="w-4 h-4" />
               </button>

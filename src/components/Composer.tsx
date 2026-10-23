@@ -29,13 +29,16 @@ function ComposerComponent({
   const [showDropzone, setShowDropzone] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Shortcut key: "/" focuses composer when not already typing
+  // Shortcut key: "/" focuses composer when not already typing and no
+  // dialog/drawer is open
   useEffect(() => {
     const handleGlobalKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (
         e.key === '/' &&
         document.activeElement?.tagName !== 'INPUT' &&
-        document.activeElement?.tagName !== 'TEXTAREA'
+        document.activeElement?.tagName !== 'TEXTAREA' &&
+        !document.querySelector('[role="dialog"]')
       ) {
         e.preventDefault();
         inputRef.current?.focus();

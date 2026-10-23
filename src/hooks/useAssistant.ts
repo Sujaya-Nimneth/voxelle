@@ -6,6 +6,7 @@ import { useSpeechSynthesis } from './useSpeechSynthesis';
 import { optimizeImage } from '@/lib/imageUtils';
 import { buildHistoryForApi } from '@/lib/chatResponse';
 import { readChatStream } from '@/lib/chatStream';
+import { toolDefinitions } from '@/app/api/chat/tools';
 import type {
   AssistantStatus,
   Message,
@@ -99,8 +100,8 @@ const INITIAL_SESSION_EVENTS: SessionEvent[] = [
   },
   {
     id: 'init-2',
-    title: '8 tools available',
-    subtitle: 'CALENDAR · SEARCH · HOME +5',
+    title: `${toolDefinitions.length} tools available`,
+    subtitle: 'CALENDAR · SMART HOME',
     timestamp: 0,
     status: 'normal',
   },
@@ -193,8 +194,8 @@ export function useAssistant() {
       },
       {
         id: 'init-2',
-        title: '8 tools available',
-        subtitle: 'CALENDAR · SEARCH · HOME +5',
+        title: `${toolDefinitions.length} tools available`,
+        subtitle: 'CALENDAR · SMART HOME',
         timestamp: now - 1000,
         status: 'normal',
       },
@@ -555,8 +556,8 @@ export function useAssistant() {
         console.error('Assistant pipeline error:', err);
         appendSystemError(
           err instanceof Error && err.message
-            ? `Error: ${err.message}. Tap retry to try again.`
-            : 'An error occurred while communicating with the assistant. Please retry.'
+            ? `Error: ${err.message}`
+            : 'An error occurred while communicating with the assistant.'
         );
         setStatus('idle');
         addSessionEvent('Signal interrupted', 'RETRY AVAILABLE', 'warn');
@@ -626,6 +627,22 @@ export function useAssistant() {
     [processMessage, uploadedImage, stopSpeaking]
   );
 
+  // Read an existing reply aloud directly — no LLM round-trip, nothing
+  // appended to history.
+  const speakMessage = useCallback(
+    (text: string) => {
+      if (!text.trim()) return;
+      stopSpeaking();
+      setStatus('speaking');
+      addSessionEvent('Voice response active', 'SYNTHESIS ENGINE ENGAGED', 'normal');
+      speak(text, () => {
+        setStatus('idle');
+        addSessionEvent('Workspace nominal', 'AWAITING YOUR NEXT SIGNAL', 'warn');
+      });
+    },
+    [speak, stopSpeaking, addSessionEvent]
+  );
+
   const clearHistory = useCallback(() => {
     // Fully invalidate any in-flight request: the superseded request's catch
     // and post-fetch animation loop must not touch state after this.
@@ -668,6 +685,7 @@ export function useAssistant() {
     clearHistory,
     dismissToolEvent,
     stopSpeaking,
+    speakMessage,
     interimTranscript,
     autoSpeak,
     toggleAutoSpeak,
