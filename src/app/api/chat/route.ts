@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMockResponse, toolDefinitions } from './tools';
+import { sanitizeMessages } from './messageSanitizer';
 import type { Message, ToolCall, ToolCallArgs } from '@/types/types';
 
 // ─── Configuration ───
@@ -49,8 +50,6 @@ const ALLOWED_MIME_TYPES = new Set([
   'image/gif',
 ]);
 const MAX_IMAGE_BASE64_LENGTH = 7 * 1024 * 1024; // ~5MB file size
-const MAX_MESSAGES_COUNT = 20;
-const MAX_MESSAGE_CONTENT_LENGTH = 4000;
 
 export async function POST(request: NextRequest) {
   try {
@@ -84,17 +83,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Sanitize and filter messages: retain only user and assistant messages, capped at last 20
-    const sanitizedMessages: Message[] = messages
-      .slice(-MAX_MESSAGES_COUNT)
-      .filter((m) => m && (m.role === 'user' || m.role === 'assistant'))
-      .map((m) => ({
-        id: typeof m.id === 'string' ? m.id : `msg_${Date.now()}`,
-        role: m.role as 'user' | 'assistant',
-        content: typeof m.content === 'string' ? m.content.slice(0, MAX_MESSAGE_CONTENT_LENGTH) : '',
-        timestamp: typeof m.timestamp === 'number' ? m.timestamp : Date.now(),
-      }))
-      .filter((m) => m.content.trim().length > 0);
+    // Sanitize and filter messages: retain only user and assistant messages,
+    // capped at last 20; an empty-content final user turn survives when an
+    // image is attached (image-only send).
+    const sanitizedMessages: Message[] = sanitizeMessages(
+      messages as Message[],
+      typeof image === 'string' && image.length > 0
+    );
 
     if (sanitizedMessages.length === 0) {
       return NextResponse.json(
@@ -175,9 +170,10 @@ function handleMock(messages: Message[], degraded = false) {
 // ─── Gemini Handler (Google AI Studio) ───
 async function handleGemini(messages: Message[], image?: string) {
   try {
+    // Image-only turns have empty text; don't emit empty text parts.
     const geminiMessages = messages.map((m) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
+      parts: m.content ? [{ text: m.content }] : [],
     }));
 
     // Attach image to the most recent user turn
@@ -302,7 +298,9 @@ async function handleGroq(messages: Message[]) {
       },
       ...messages.map((m) => ({
         role: m.role,
-        content: m.content,
+        // Groq's text models require non-empty content; image-only turns get a
+        // placeholder (images are only routed to the multimodal provider).
+        content: m.content || '[user attached an image]',
       })),
     ];
 

@@ -327,10 +327,9 @@ export function useAssistant() {
 
       setStatus('processing');
 
+      const signalLabel = userMessage.content || 'Visual signal';
       addSessionEvent(
-        `Signal dispatched: "${userMessage.content.slice(0, 22)}${
-          userMessage.content.length > 22 ? '...' : ''
-        }"`,
+        `Signal dispatched: "${signalLabel.slice(0, 22)}${signalLabel.length > 22 ? '...' : ''}"`,
         'TRANSIT · TLS 1.3',
         'normal'
       );
@@ -521,9 +520,12 @@ export function useAssistant() {
 
   const sendTextMessage = useCallback(
     (text: string) => {
-      if (!text.trim() || isNetworkBusyRef.current) return;
+      const trimmed = text.trim();
+      // Image-only sends are valid: the composer enables Send for an
+      // attached image even without accompanying text.
+      if ((!trimmed && !uploadedImage) || isNetworkBusyRef.current) return;
       stopSpeaking();
-      processMessage(text.trim(), uploadedImage);
+      processMessage(trimmed, uploadedImage);
     },
     [processMessage, uploadedImage, stopSpeaking]
   );
