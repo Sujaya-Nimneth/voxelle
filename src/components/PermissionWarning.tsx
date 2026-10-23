@@ -34,6 +34,7 @@ export default function PermissionWarning({
       animate={{ opacity: 1, y: 0, height: 'auto' }}
       exit={{ opacity: 0, y: -10, height: 0 }}
       className="px-6 sm:px-8 mt-2"
+      role="alert"
     >
       <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-[rgba(255,117,148,0.1)] border border-[rgba(255,117,148,0.25)] text-[#ff99b3]">
         <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5 text-danger" />

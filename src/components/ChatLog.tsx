@@ -325,6 +325,8 @@ function ChatLog({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               className="flex justify-end"
+              role="status"
+              aria-live="polite"
             >
               <div className="max-w-[85%] sm:max-w-[75%]">
                 <div className="rounded-2xl rounded-br-md py-2.5 px-4 border border-cyan bg-[rgba(53,230,255,0.12)] shadow-[0_0_20px_rgba(53,230,255,0.15)] flex items-center gap-2">
@@ -351,7 +353,11 @@ function ChatLog({
                 <Sparkles className="w-4 h-4 text-ink stroke-[2.5]" />
               </div>
               <div className="pt-1.5">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-line">
+                <div
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.03] border border-line"
+                  role="status"
+                  aria-live="polite"
+                >
                   <div className="w-1.5 h-1.5 rounded-full bg-cyan cyber-dot-1" />
                   <div className="w-1.5 h-1.5 rounded-full bg-violet cyber-dot-2" />
                   <div className="w-1.5 h-1.5 rounded-full bg-cyan cyber-dot-3" />

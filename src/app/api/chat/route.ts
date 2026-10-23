@@ -51,8 +51,6 @@ const ALLOWED_MIME_TYPES = new Set([
 ]);
 const MAX_IMAGE_BASE64_LENGTH = 7 * 1024 * 1024; // ~5MB file size
 
-const FALLBACK_RESPONSE = "I'm not sure how to respond to that. Could you try rephrasing?";
-
 export async function POST(request: NextRequest) {
   try {
     // 1. Rate Limiting Check

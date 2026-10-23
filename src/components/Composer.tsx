@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect, KeyboardEvent, memo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { ImagePlus, Mic, Send, Square } from 'lucide-react';
 import ImageDropzone from './ImageDropzone';
 import type { AssistantStatus } from '@/types/types';
@@ -28,6 +28,7 @@ function ComposerComponent({
   const [textInput, setTextInput] = useState('');
   const [showDropzone, setShowDropzone] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const prefersReducedMotion = useReducedMotion();
 
   // Shortcut key: "/" focuses composer when not already typing and no
   // dialog/drawer is open
@@ -158,8 +159,8 @@ function ComposerComponent({
         >
           {status === 'listening' ? (
             <motion.span
-              animate={{ scale: [1, 1.25, 1] }}
-              transition={{ duration: 1, repeat: Infinity }}
+              animate={prefersReducedMotion ? undefined : { scale: [1, 1.25, 1] }}
+              transition={prefersReducedMotion ? { duration: 0 } : { duration: 1, repeat: Infinity }}
               className="flex items-center justify-center"
             >
               <Mic className="w-4 h-4 text-white" />

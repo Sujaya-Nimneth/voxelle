@@ -330,7 +330,11 @@ function Sidebar({
               </div>
             </div>
             <button
+              type="button"
               onClick={onToggleAutoSpeak}
+              role="switch"
+              aria-checked={autoSpeak}
+              aria-label="Spoken audio responses"
               className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
                 autoSpeak ? 'bg-cyan' : 'bg-white/10'
               }`}
@@ -347,19 +351,23 @@ function Sidebar({
           {ttsSettings && onUpdateTtsSettings && (
             <div className="p-3 rounded-xl bg-white/[0.02] border border-line">
               <div className="flex justify-between items-center mb-2">
-                <span className="font-semibold text-white">Speech Rate</span>
+                <label htmlFor="tts-rate" className="font-semibold text-white">
+                  Speech Rate
+                </label>
                 <span className="font-mono text-[11px] text-cyan">
                   {ttsSettings.rate.toFixed(1)}x
                 </span>
               </div>
               <input
+                id="tts-rate"
                 type="range"
                 min="0.7"
                 max="1.5"
                 step="0.1"
                 value={ttsSettings.rate}
                 onChange={(e) => onUpdateTtsSettings({ rate: parseFloat(e.target.value) })}
-                className="w-full accent-[var(--cyan)] cursor-pointer"
+                aria-label="Speech rate"
+                className="w-full accent-cyan cursor-pointer"
               />
             </div>
           )}
@@ -367,8 +375,11 @@ function Sidebar({
           {/* Voice Engine Picker */}
           {voices.length > 0 && ttsSettings && onUpdateTtsSettings && (
             <div className="p-3 rounded-xl bg-white/[0.02] border border-line">
-              <div className="font-semibold text-white mb-2">Voice Engine</div>
+              <label htmlFor="tts-voice" className="block font-semibold text-white mb-2">
+                Voice Engine
+              </label>
               <select
+                id="tts-voice"
                 value={ttsSettings.voiceURI || ''}
                 onChange={(e) => onUpdateTtsSettings({ voiceURI: e.target.value })}
                 className="w-full bg-[rgba(8,11,20,0.8)] border border-line rounded-lg p-2 text-[16px] text-white outline-none focus-visible:ring-1 focus-visible:ring-cyan cursor-pointer"
