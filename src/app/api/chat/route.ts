@@ -123,14 +123,18 @@ export async function POST(request: NextRequest) {
       case 'gemini':
         if (!GEMINI_API_KEY) {
           console.warn('GEMINI_API_KEY is not configured. Falling back to mock engine.');
-          return streamNdjson(streamMock(sanitizedMessages, true));
+          return streamNdjson(
+            streamMock(sanitizedMessages, true, 'Gemini API key not configured')
+          );
         }
         return streamNdjson(streamGemini(sanitizedMessages, validatedImage));
 
       case 'groq':
         if (!GROQ_API_KEY) {
           console.warn('GROQ_API_KEY is not configured. Falling back to mock engine.');
-          return streamNdjson(streamMock(sanitizedMessages, true));
+          return streamNdjson(
+            streamMock(sanitizedMessages, true, 'Groq API key not configured')
+          );
         }
         return streamNdjson(streamGroq(sanitizedMessages));
 
@@ -232,7 +236,8 @@ function narrativeForToolCall(tc: ToolCall): string {
 
 async function* streamMock(
   messages: Message[],
-  degraded: boolean
+  degraded: boolean,
+  degradedReason?: string
 ): AsyncGenerator<ChatStreamEvent> {
   const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user');
 
@@ -244,7 +249,7 @@ async function* streamMock(
         toolCalls: undefined,
       };
 
-  yield { type: 'meta', provider: 'mock', degraded };
+  yield { type: 'meta', provider: 'mock', degraded, reason: degradedReason };
 
   if (result.toolCalls) {
     for (const tc of result.toolCalls) {
@@ -331,13 +336,16 @@ Keep your responses natural, conversational, and direct since they may be spoken
           'x-goog-api-key': GEMINI_API_KEY,
         },
         body: JSON.stringify(geminiBody),
+        // Don't let the serverless function burn until the platform timeout
+        // if the provider hangs; the client gives up long before this.
+        signal: AbortSignal.timeout(30_000),
       }
     );
 
     if (!res.ok || !res.body) {
       const errorText = await res.text().catch(() => '');
       console.error('Gemini API call failed:', res.status, errorText);
-      yield* streamMock(messages, true);
+      yield* streamMock(messages, true, `Gemini error (HTTP ${res.status})`);
       return;
     }
 
@@ -427,6 +435,7 @@ async function* streamGroq(messages: Message[]): AsyncGenerator<ChatStreamEvent>
         'Content-Type': 'application/json',
         Authorization: `Bearer ${GROQ_API_KEY}`,
       },
+      signal: AbortSignal.timeout(30_000),
       body: JSON.stringify({
         model: GROQ_MODEL,
         messages: groqMessages,
@@ -441,7 +450,7 @@ async function* streamGroq(messages: Message[]): AsyncGenerator<ChatStreamEvent>
     if (!res.ok || !res.body) {
       const errorText = await res.text().catch(() => '');
       console.error('Groq API call failed:', res.status, errorText);
-      yield* streamMock(messages, true);
+      yield* streamMock(messages, true, `Groq error (HTTP ${res.status})`);
       return;
     }
 

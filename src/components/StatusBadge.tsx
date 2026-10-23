@@ -7,6 +7,7 @@ interface StatusBadgeProps {
   status: AssistantStatus;
   provider?: string;
   isDegraded?: boolean;
+  degradedReason?: string | null;
 }
 
 const statusConfig: Record<
@@ -43,13 +44,25 @@ const statusConfig: Record<
   },
 };
 
-export default function StatusBadge({ status, provider, isDegraded }: StatusBadgeProps) {
+export default function StatusBadge({
+  status,
+  provider,
+  isDegraded,
+  degradedReason,
+}: StatusBadgeProps) {
   const config = statusConfig[status];
 
   return (
     <div className="flex items-center gap-2">
       {provider && provider !== 'mock' && (
-        <span className="hidden md:inline-block font-mono text-[9px] uppercase px-2 py-0.5 rounded-full border border-white/10 text-muted bg-white/[0.02]">
+        <span
+          className="hidden md:inline-block font-mono text-[9px] uppercase px-2 py-0.5 rounded-full border border-white/10 text-muted bg-white/[0.02]"
+          title={
+            isDegraded
+              ? `Provider fallback active${degradedReason ? `: ${degradedReason}` : ''}`
+              : provider
+          }
+        >
           {isDegraded ? `${provider} (fallback)` : provider}
         </span>
       )}

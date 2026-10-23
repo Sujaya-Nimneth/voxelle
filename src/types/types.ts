@@ -42,7 +42,7 @@ export interface ChatRequest {
 
 // NDJSON stream events emitted by /api/chat, one JSON object per line.
 export type ChatStreamEvent =
-  | { type: 'meta'; provider: string; degraded?: boolean }
+  | { type: 'meta'; provider: string; degraded?: boolean; reason?: string }
   | { type: 'delta'; text: string }
   | { type: 'tool'; toolCall: ToolCall }
   | { type: 'error'; message: string }

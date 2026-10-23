@@ -125,6 +125,7 @@ export function useAssistant() {
   const [autoSpeak, setAutoSpeak] = useState(true);
   const [activeProvider, setActiveProvider] = useState<string>('mock');
   const [isDegraded, setIsDegraded] = useState(false);
+  const [degradedReason, setDegradedReason] = useState<string | null>(null);
 
   const statusRef = useRef<AssistantStatus>('idle');
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -412,7 +413,10 @@ export function useAssistant() {
           },
           onMeta: (meta) => {
             if (meta.provider) setActiveProvider(meta.provider);
-            if (meta.degraded !== undefined) setIsDegraded(meta.degraded);
+            if (meta.degraded !== undefined) {
+              setIsDegraded(meta.degraded);
+              setDegradedReason(meta.degraded ? meta.reason ?? null : null);
+            }
           },
           onDelta: (text) => {
             fullText += text;
@@ -691,6 +695,7 @@ export function useAssistant() {
     toggleAutoSpeak,
     activeProvider,
     isDegraded,
+    degradedReason,
     voices,
     ttsSettings,
     updateTtsSettings,

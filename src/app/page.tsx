@@ -36,6 +36,7 @@ export default function Home() {
     toggleAutoSpeak,
     activeProvider,
     isDegraded,
+    degradedReason,
     voices,
     ttsSettings,
     updateTtsSettings,
@@ -111,6 +112,7 @@ export default function Home() {
                 status={status}
                 provider={activeProvider}
                 isDegraded={isDegraded}
+                degradedReason={degradedReason}
               />
 
               {/* Clear conversation action */}
