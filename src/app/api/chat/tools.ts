@@ -1,4 +1,4 @@
-import type { ToolCall } from '../../../types/types';
+import type { ToolCall } from '@/types/types';
 
 // ─── Tool Definitions (compatible with Gemini & OpenAI function calling formats) ───
 
@@ -48,21 +48,40 @@ export const toolDefinitions = [
   },
 ];
 
-// ─── Mock Tool Execution ───
+// ─── Tool Result Formatting (single source for server + client) ───
 
-export function executeToolCall(toolCall: ToolCall): string {
+// Model-produced arguments aren't schema-validated, so coerce defensively:
+// an undefined must never render as 'Scheduled "undefined"'.
+function arg(value: string | number | boolean | undefined, fallback: string): string {
+  return value === undefined || value === null || value === '' ? fallback : String(value);
+}
+
+// Result string shown on tool telemetry cards.
+export function formatToolResult(toolCall: ToolCall): string {
   switch (toolCall.name) {
     case 'add_calendar_event': {
       const { title, time, date } = toolCall.arguments;
-      return `Scheduled "${title}" for ${date} at ${time}.`;
+      return `Scheduled "${arg(title, 'untitled event')}" for ${arg(date, 'unspecified date')} at ${arg(time, 'unspecified time')}.`;
     }
     case 'toggle_smart_home_device': {
       const { device_name, state } = toolCall.arguments;
-      return `${device_name} has been set to ${state}.`;
+      return `${arg(device_name, 'Device')} has been set to ${arg(state, 'the requested state')}.`;
     }
     default:
       return `Executed ${toolCall.name}`;
   }
+}
+
+// Assistant-voice narrative used when a provider emits a tool call with no
+// accompanying text.
+export function formatToolNarrative(toolCall: ToolCall): string {
+  if (toolCall.name === 'add_calendar_event') {
+    return `I've scheduled "${arg(toolCall.arguments.title, 'an event')}" for ${arg(toolCall.arguments.date, 'an unspecified date')} at ${arg(toolCall.arguments.time, 'an unspecified time')}.`;
+  }
+  if (toolCall.name === 'toggle_smart_home_device') {
+    return `I've turned ${arg(toolCall.arguments.state, 'on')} the ${arg(toolCall.arguments.device_name, 'device')}.`;
+  }
+  return `I've executed ${toolCall.name.replace(/_/g, ' ')}.`;
 }
 
 // ─── Mock Responses (for demo mode without an API key) ───

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMockResponse, toolDefinitions } from './tools';
+import { getMockResponse, toolDefinitions, formatToolNarrative } from './tools';
 import { sanitizeMessages } from './messageSanitizer';
 import type { Message, ToolCall, ToolCallArgs, ChatStreamEvent } from '@/types/types';
 
@@ -221,17 +221,6 @@ async function* parseSse(body: ReadableStream<Uint8Array>): AsyncGenerator<strin
   }
 }
 
-// Contextual narrative when a tool was invoked with no accompanying text.
-function narrativeForToolCall(tc: ToolCall): string {
-  if (tc.name === 'add_calendar_event') {
-    return `I've scheduled "${tc.arguments.title}" for ${tc.arguments.date} at ${tc.arguments.time}.`;
-  }
-  if (tc.name === 'toggle_smart_home_device') {
-    return `I've turned ${tc.arguments.state} the ${tc.arguments.device_name}.`;
-  }
-  return `I've executed ${tc.name.replace(/_/g, ' ')}.`;
-}
-
 // ─── Mock Handler (demo mode / degraded fallback) ───
 
 async function* streamMock(
@@ -389,7 +378,7 @@ Keep your responses natural, conversational, and direct since they may be spoken
     }
 
     if (toolCalls.length > 0 && !hasText) {
-      yield { type: 'delta', text: toolCalls.map(narrativeForToolCall).join(' ') };
+      yield { type: 'delta', text: toolCalls.map(formatToolNarrative).join(' ') };
     }
 
     yield { type: 'done' };
@@ -524,7 +513,7 @@ async function* streamGroq(messages: Message[]): AsyncGenerator<ChatStreamEvent>
     }
 
     if (toolCalls.length > 0 && !hasText) {
-      yield { type: 'delta', text: toolCalls.map(narrativeForToolCall).join(' ') };
+      yield { type: 'delta', text: toolCalls.map(formatToolNarrative).join(' ') };
     }
 
     yield { type: 'done' };

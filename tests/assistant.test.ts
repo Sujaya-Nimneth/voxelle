@@ -1,6 +1,11 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { getMockResponse, toolDefinitions, executeToolCall } from '../src/app/api/chat/tools.ts';
+import {
+  getMockResponse,
+  toolDefinitions,
+  formatToolResult,
+  formatToolNarrative,
+} from '../src/app/api/chat/tools.ts';
 
 describe('Voxelle Assistant Tools & Mock Engine', () => {
   test('toolDefinitions contains calendar and smart home specifications', () => {
@@ -49,8 +54,8 @@ describe('Voxelle Assistant Tools & Mock Engine', () => {
     assert.strictEqual(res.toolCalls, undefined);
   });
 
-  test('executeToolCall formats readable action string for calendar', () => {
-    const result = executeToolCall({
+  test('formatToolResult formats readable action string for calendar', () => {
+    const result = formatToolResult({
       id: 'test_1',
       name: 'add_calendar_event',
       arguments: {
@@ -63,8 +68,8 @@ describe('Voxelle Assistant Tools & Mock Engine', () => {
     assert.strictEqual(result, 'Scheduled "Project Standup" for Today at 10:00 AM.');
   });
 
-  test('executeToolCall formats readable action string for smart home', () => {
-    const result = executeToolCall({
+  test('formatToolResult formats readable action string for smart home', () => {
+    const result = formatToolResult({
       id: 'test_2',
       name: 'toggle_smart_home_device',
       arguments: {
@@ -76,13 +81,34 @@ describe('Voxelle Assistant Tools & Mock Engine', () => {
     assert.strictEqual(result, 'Studio Desk Lamp has been set to on.');
   });
 
-  test('executeToolCall handles unknown tool gracefully', () => {
-    const result = executeToolCall({
+  test('formatToolResult handles unknown tool gracefully', () => {
+    const result = formatToolResult({
       id: 'test_3',
       name: 'custom_workspace_action',
       arguments: {},
       status: 'completed',
     });
     assert.strictEqual(result, 'Executed custom_workspace_action');
+  });
+
+  test('formatToolResult never renders undefined for missing args', () => {
+    const result = formatToolResult({
+      id: 'test_4',
+      name: 'add_calendar_event',
+      arguments: {},
+      status: 'completed',
+    });
+    assert.ok(!result.includes('undefined'));
+  });
+
+  test('formatToolNarrative speaks in assistant voice without undefined args', () => {
+    const narrative = formatToolNarrative({
+      id: 'test_5',
+      name: 'toggle_smart_home_device',
+      arguments: { state: 'off' },
+      status: 'pending',
+    });
+    assert.ok(narrative.startsWith("I've turned"));
+    assert.ok(!narrative.includes('undefined'));
   });
 });

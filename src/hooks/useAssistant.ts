@@ -6,7 +6,7 @@ import { useSpeechSynthesis } from './useSpeechSynthesis';
 import { optimizeImage } from '@/lib/imageUtils';
 import { buildHistoryForApi } from '@/lib/chatResponse';
 import { readChatStream } from '@/lib/chatStream';
-import { toolDefinitions } from '@/app/api/chat/tools';
+import { toolDefinitions, formatToolResult } from '@/app/api/chat/tools';
 import type {
   AssistantStatus,
   Message,
@@ -90,29 +90,31 @@ function saveSignals(signals: string[]) {
   }
 }
 
-const INITIAL_SESSION_EVENTS: SessionEvent[] = [
-  {
-    id: 'init-1',
-    title: 'Workspace connected',
-    subtitle: 'JUST NOW · ENCRYPTED',
-    timestamp: 0,
-    status: 'normal',
-  },
-  {
-    id: 'init-2',
-    title: `${toolDefinitions.length} tools available`,
-    subtitle: 'CALENDAR · SMART HOME',
-    timestamp: 0,
-    status: 'normal',
-  },
-  {
-    id: 'init-3',
-    title: 'No actions currently running',
-    subtitle: 'AWAITING YOUR NEXT SIGNAL',
-    timestamp: 0,
-    status: 'warn',
-  },
-];
+function createInitialSessionEvents(now: number): SessionEvent[] {
+  return [
+    {
+      id: 'init-1',
+      title: 'Workspace connected',
+      subtitle: 'JUST NOW · ENCRYPTED',
+      timestamp: now,
+      status: 'normal',
+    },
+    {
+      id: 'init-2',
+      title: `${toolDefinitions.length} tools available`,
+      subtitle: 'CALENDAR · SMART HOME',
+      timestamp: now - 1000,
+      status: 'normal',
+    },
+    {
+      id: 'init-3',
+      title: 'No actions currently running',
+      subtitle: 'AWAITING YOUR NEXT SIGNAL',
+      timestamp: now - 2000,
+      status: 'warn',
+    },
+  ];
+}
 
 export function useAssistant() {
   const [status, setStatus] = useState<AssistantStatus>('idle');
@@ -121,7 +123,9 @@ export function useAssistant() {
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [recentSignals, setRecentSignals] = useState<string[]>(DEFAULT_SIGNALS);
-  const [sessionEvents, setSessionEvents] = useState<SessionEvent[]>(INITIAL_SESSION_EVENTS);
+  const [sessionEvents, setSessionEvents] = useState<SessionEvent[]>(() =>
+    createInitialSessionEvents(0)
+  );
   const [autoSpeak, setAutoSpeak] = useState(true);
   const [activeProvider, setActiveProvider] = useState<string>('mock');
   const [isDegraded, setIsDegraded] = useState(false);
@@ -184,30 +188,7 @@ export function useAssistant() {
       // Ignore
     }
 
-    const now = Date.now();
-    setSessionEvents([
-      {
-        id: 'init-1',
-        title: 'Workspace connected',
-        subtitle: 'JUST NOW · ENCRYPTED',
-        timestamp: now,
-        status: 'normal',
-      },
-      {
-        id: 'init-2',
-        title: `${toolDefinitions.length} tools available`,
-        subtitle: 'CALENDAR · SMART HOME',
-        timestamp: now - 1000,
-        status: 'normal',
-      },
-      {
-        id: 'init-3',
-        title: 'No actions currently running',
-        subtitle: 'AWAITING YOUR NEXT SIGNAL',
-        timestamp: now - 2000,
-        status: 'warn',
-      },
-    ]);
+    setSessionEvents(createInitialSessionEvents(Date.now()));
 
     setHydrated(true);
   }, []);
@@ -480,7 +461,7 @@ export function useAssistant() {
                   ? {
                       ...te,
                       toolCall: { ...te.toolCall, status: 'completed' as const },
-                      result: getToolResult(tc),
+                      result: formatToolResult(tc),
                     }
                   : te
               )
@@ -700,14 +681,4 @@ export function useAssistant() {
     ttsSettings,
     updateTtsSettings,
   };
-}
-
-function getToolResult(tc: ToolCall): string {
-  if (tc.name === 'add_calendar_event') {
-    return `Scheduled "${tc.arguments.title}" for ${tc.arguments.date} at ${tc.arguments.time}`;
-  }
-  if (tc.name === 'toggle_smart_home_device') {
-    return `${tc.arguments.device_name} turned ${tc.arguments.state}`;
-  }
-  return 'Action completed successfully';
 }
