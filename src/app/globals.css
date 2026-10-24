@@ -1,22 +1,29 @@
 @import "tailwindcss";
 
+/*
+ * Voxelle design tokens — refined dark.
+ *
+ * One primary accent (cyan), violet reserved for the speaking state, green
+ * for success, amber for warnings, rose for danger. Glow is rationed: the
+ * listening mic and the status dot earn it; everything else is flat surface
+ * + hairline border.
+ */
 :root {
-  --ink: #080b14;
-  --surface: #0d1220;
-  --surface-2: #111827;
-  --line: rgba(163, 184, 218, 0.13);
-  --muted: #8090aa;
-  /* Secondary text tiers — both clear WCAG AA (4.5:1) on the dark surfaces,
-     unlike the one-off grays they replaced (several sat near 4.0:1 at 9-10px). */
-  --dim: #93a5c2; /* labels, metadata, placeholders, inactive controls */
-  --soft: #c3d0e4; /* body-strength text on dark: replies, chips, event text */
-  --text: #f0f5ff;
-  --cyan: #35e6ff;
-  --violet: #926cff;
-  --violet-soft: #d3c8ff;
-  --lime: #b5f56f;
-  --danger: #ff7594;
-  --warning: #ffc561;
+  --ink: #0a0d16;
+  --surface: #0e1320;
+  --surface-2: #131a2b;
+  --line: rgba(148, 163, 184, 0.14);
+  --muted: #7c8aa5;
+  /* Secondary text tiers — both clear WCAG AA (4.5:1) on the dark surfaces. */
+  --dim: #94a3b8; /* labels, metadata, placeholders, inactive controls */
+  --soft: #c7d2e4; /* body-strength text on dark: replies, chips, event text */
+  --text: #eef3ff;
+  --cyan: #22d3ee;
+  --violet: #8b7cf6; /* speaking / synthesis state only */
+  --violet-soft: #cfc6ff;
+  --green: #4ade80; /* success */
+  --danger: #fb7185;
+  --warning: #fbbf24;
 }
 
 @theme inline {
@@ -31,7 +38,7 @@
   --color-cyan: var(--cyan);
   --color-violet: var(--violet);
   --color-violet-soft: var(--violet-soft);
-  --color-lime: var(--lime);
+  --color-green: var(--green);
   --color-danger: var(--danger);
   --color-warning: var(--warning);
   --font-sans: var(--font-manrope), system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
@@ -41,7 +48,7 @@
 * {
   box-sizing: border-box;
   scrollbar-width: thin;
-  scrollbar-color: rgba(128, 144, 170, 0.25) transparent;
+  scrollbar-color: rgba(148, 163, 184, 0.22) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -54,19 +61,36 @@
 }
 
 *::-webkit-scrollbar-thumb {
-  background: rgba(128, 144, 170, 0.25);
+  background: rgba(148, 163, 184, 0.22);
   border-radius: 4px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(128, 144, 170, 0.45);
+  background: rgba(148, 163, 184, 0.4);
 }
 
 body {
-  background: #060810;
+  background: #05070d;
   color: var(--text);
   font-family: var(--font-sans);
   overflow-x: hidden;
+}
+
+/* Shared label style: 11px mono uppercase for section headers and metadata. */
+.label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--dim);
+  font-weight: 500;
+}
+
+/* Keyboard focus is always visible and consistent. */
+:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 
 /* Mobile shell uses 100dvh; match it so the desktop grid doesn't overflow
@@ -75,20 +99,20 @@ body {
   min-height: 100dvh;
 }
 
-/* Ambient Cyber Gradients & Grid */
+/* Ambient background: two quiet gradients, no grid pattern at rest. */
 .cyber-bg {
-  background: radial-gradient(700px 420px at 76% -8%, rgba(91, 67, 190, 0.22), transparent 68%),
-              radial-gradient(600px 400px at 35% 108%, rgba(0, 184, 211, 0.12), transparent 70%),
+  background: radial-gradient(680px 420px at 78% -10%, rgba(34, 211, 238, 0.06), transparent 66%),
+              radial-gradient(600px 400px at 20% 108%, rgba(139, 124, 246, 0.07), transparent 70%),
               var(--ink);
 }
 
 .cyber-grid {
   position: absolute;
   inset: 0;
-  opacity: 0.23;
+  opacity: 0.12;
   pointer-events: none;
-  background-image: linear-gradient(rgba(98, 151, 188, 0.12) 1px, transparent 1px),
-                    linear-gradient(90deg, rgba(98, 151, 188, 0.12) 1px, transparent 1px);
+  background-image: linear-gradient(rgba(100, 130, 170, 0.1) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(100, 130, 170, 0.1) 1px, transparent 1px);
   background-size: 48px 48px;
   mask-image: linear-gradient(to bottom, black, transparent 80%);
   -webkit-mask-image: linear-gradient(to bottom, black, transparent 80%);
@@ -98,7 +122,7 @@ body {
 .cyber-shell {
   position: relative;
   display: grid;
-  grid-template-columns: 262px minmax(500px, 1fr) 316px;
+  grid-template-columns: 264px minmax(500px, 1fr) 316px;
 }
 
 @media (max-width: 1180px) {
@@ -114,40 +138,30 @@ body {
   }
 }
 
-/* Glowing Elements */
+/* Glow budget: only the brand mark earns a halo. */
 .glow-mark {
-  background: linear-gradient(145deg, var(--cyan), #7e80ff);
-  box-shadow: 0 0 28px rgba(50, 220, 255, 0.35);
+  background: linear-gradient(145deg, var(--cyan), #6d7cf7);
+  box-shadow: 0 0 22px rgba(34, 211, 238, 0.25);
 }
 
-.glow-cyan {
-  box-shadow: 0 0 20px rgba(53, 230, 255, 0.3),
-              0 0 40px rgba(53, 230, 255, 0.12);
-}
-
-.glow-lime {
-  box-shadow: 0 0 10px var(--lime);
-}
-
-.glow-violet {
-  box-shadow: 0 0 20px rgba(146, 108, 255, 0.35);
+.glow-green {
+  box-shadow: 0 0 8px var(--green);
 }
 
 /* Cyber Glass Card */
 .cyber-glass {
-  background: rgba(13, 18, 32, 0.72);
+  background: rgba(14, 19, 32, 0.72);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--line);
 }
 
 .cyber-glass-strong {
-  background: rgba(14, 20, 34, 0.85);
+  background: rgba(15, 21, 36, 0.9);
   backdrop-filter: blur(30px);
   -webkit-backdrop-filter: blur(30px);
   border: 1px solid var(--line);
 }
-
 
 /* Shimmer Progress */
 @keyframes shimmer-sweep {
@@ -159,7 +173,7 @@ body {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(53, 230, 255, 0.4) 50%,
+    rgba(34, 211, 238, 0.35) 50%,
     transparent 100%
   );
   background-size: 200% 100%;

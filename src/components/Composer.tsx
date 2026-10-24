@@ -10,25 +10,41 @@ interface ComposerProps {
   status: AssistantStatus;
   sttSupported: boolean;
   uploadedImage: string | null;
+  /** Dropzone visibility is owned by the page (the empty state can open it). */
+  showDropzone: boolean;
+  onSetShowDropzone: (show: boolean) => void;
   onSetUploadedImage: (image: string | null) => void;
   onSendMessage: (text: string) => void;
   onToggleListening: () => void;
   onStopSpeaking: () => void;
 }
 
+const MAX_TEXTAREA_HEIGHT = 160;
+
 function ComposerComponent({
   status,
   sttSupported,
   uploadedImage,
+  showDropzone,
+  onSetShowDropzone,
   onSetUploadedImage,
   onSendMessage,
   onToggleListening,
   onStopSpeaking,
 }: ComposerProps) {
   const [textInput, setTextInput] = useState('');
-  const [showDropzone, setShowDropzone] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const prefersReducedMotion = useReducedMotion();
+
+  // Auto-grow the textarea with content, capped so long drafts scroll
+  // instead of pushing the chat log off-screen.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
+    el.style.overflowY = el.scrollHeight > MAX_TEXTAREA_HEIGHT ? 'auto' : 'hidden';
+  }, [textInput]);
 
   // Shortcut key: "/" focuses composer when not already typing and no
   // dialog/drawer is open
@@ -53,14 +69,15 @@ function ComposerComponent({
     if (textInput.trim() || uploadedImage) {
       onSendMessage(textInput);
       setTextInput('');
-      setShowDropzone(false);
+      onSetShowDropzone(false);
       // Keep input focused
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [textInput, uploadedImage, onSendMessage]);
+  }, [textInput, uploadedImage, onSendMessage, onSetShowDropzone]);
 
   const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
+    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      // Enter sends; Shift+Enter inserts a newline (multiline drafts).
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         handleSend();
@@ -89,41 +106,41 @@ function ComposerComponent({
         )}
       </AnimatePresence>
 
-      {/* Cyber Composer Bar */}
-      <div className="max-w-[760px] mx-auto border border-[rgba(133,156,191,0.22)] bg-[rgba(14,20,34,0.92)] backdrop-blur-2xl shadow-[0_18px_50px_rgba(0,0,0,0.45)] rounded-[16px] p-[8px] flex items-center gap-[9px] transition-all focus-within:border-[rgba(53,230,255,0.4)] focus-within:shadow-[0_0_25px_rgba(53,230,255,0.12)]">
+      {/* Composer Bar */}
+      <div className="max-w-[760px] mx-auto border border-line bg-[rgba(14,20,34,0.92)] backdrop-blur-2xl shadow-[0_18px_50px_rgba(0,0,0,0.4)] rounded-[14px] p-2 flex items-end gap-2 transition-colors focus-within:border-cyan-500/35">
         {/* Attach Image Button */}
         <button
           type="button"
-          onClick={() => setShowDropzone((v) => !v)}
-          className={`w-[38px] h-[38px] rounded-[10px] flex items-center justify-center transition-all cursor-pointer flex-shrink-0 ${
+          onClick={() => onSetShowDropzone(!showDropzone)}
+          className={`w-[38px] h-[38px] rounded-[10px] flex items-center justify-center transition-colors cursor-pointer flex-shrink-0 ${
             uploadedImage
-              ? 'bg-cyan-500/20 text-cyan border border-cyan-500/40 shadow-[0_0_12px_rgba(53,230,255,0.2)]'
+              ? 'bg-cyan-500/15 text-cyan border border-cyan-500/35'
               : showDropzone
               ? 'bg-white/10 text-white'
               : 'text-dim hover:text-white hover:bg-white/[0.04]'
           }`}
-          title="Attach visual signal (PNG, JPEG, WebP)"
+          title="Attach an image (PNG, JPEG, WebP)"
           aria-label="Attach image"
         >
           <ImagePlus className="w-4 h-4" />
         </button>
 
         {/* Text Input */}
-        <input
+        <textarea
           ref={inputRef}
-          id="text-input"
-          type="text"
+          id="composer-input"
+          rows={1}
           value={textInput}
           onChange={(e) => setTextInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={
             status === 'processing'
-              ? 'Thinking and executing tools...'
+              ? 'Thinking and executing tools…'
               : status === 'listening'
-              ? 'Listening to your voice... (say something)'
-              : 'Message Voxelle or press "/" to focus…'
+              ? 'Listening to your voice… (say something)'
+              : 'Message Voxelle — press / to focus, Shift+Enter for a new line'
           }
-          className="flex-1 bg-transparent border-none outline-none text-[16px] text-text placeholder:text-dim px-2 font-sans"
+          className="flex-1 bg-transparent border-none outline-none resize-none text-[16px] leading-relaxed text-text placeholder:text-dim px-1 py-2 font-sans max-h-[160px]"
           aria-label="Message Voxelle"
         />
 
@@ -132,7 +149,7 @@ function ComposerComponent({
           <button
             type="button"
             onClick={onStopSpeaking}
-            className="px-2.5 py-1.5 rounded-lg text-[11px] font-mono text-violet bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0"
+            className="px-2.5 py-1.5 rounded-lg text-[11px] font-mono text-violet-soft bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 transition-colors cursor-pointer flex items-center gap-1.5 flex-shrink-0"
             title="Silence speech audio"
             aria-label="Mute assistant speech"
           >
@@ -147,19 +164,19 @@ function ComposerComponent({
           type="button"
           onClick={onToggleListening}
           disabled={!sttSupported}
-          className={`w-[38px] h-[38px] rounded-full border transition-all flex items-center justify-center cursor-pointer flex-shrink-0 relative ${
+          className={`w-[38px] h-[38px] rounded-full border transition-colors flex items-center justify-center cursor-pointer flex-shrink-0 relative ${
             status === 'listening'
-              ? 'border-cyan bg-[rgba(53,230,255,0.25)] text-white shadow-[0_0_22px_var(--cyan)]'
+              ? 'border-cyan bg-cyan-500/20 text-white shadow-[0_0_18px_var(--cyan)]'
               : status === 'speaking'
-              ? 'border-violet bg-[rgba(146,108,255,0.2)] text-violet shadow-[0_0_18px_rgba(146,108,255,0.3)]'
-              : 'border-[rgba(53,230,255,0.5)] bg-[rgba(39,176,208,0.12)] text-cyan shadow-[0_0_16px_rgba(53,230,255,0.1)] hover:bg-[rgba(39,176,208,0.22)]'
+              ? 'border-violet bg-violet-500/15 text-violet'
+              : 'border-cyan-500/40 bg-cyan-500/[0.08] text-cyan hover:bg-cyan-500/[0.15]'
           } disabled:opacity-30 disabled:cursor-not-allowed`}
           title={status === 'listening' ? 'Stop listening' : 'Start voice input'}
           aria-label={status === 'listening' ? 'Stop voice recording' : 'Start voice recording'}
         >
           {status === 'listening' ? (
             <motion.span
-              animate={prefersReducedMotion ? undefined : { scale: [1, 1.25, 1] }}
+              animate={prefersReducedMotion ? undefined : { scale: [1, 1.2, 1] }}
               transition={prefersReducedMotion ? { duration: 0 } : { duration: 1, repeat: Infinity }}
               className="flex items-center justify-center"
             >
@@ -175,8 +192,8 @@ function ComposerComponent({
           type="button"
           onClick={handleSend}
           disabled={!textInput.trim() && !uploadedImage}
-          className="w-[38px] h-[38px] rounded-[10px] bg-gradient-to-br from-[var(--cyan)] to-[#6e85ff] text-[#06111d] flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-90 hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex-shrink-0 shadow-[0_0_15px_rgba(53,230,255,0.25)]"
-          title="Send signal"
+          className="w-[38px] h-[38px] rounded-[10px] bg-cyan text-[#04121a] flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.97] cursor-pointer flex-shrink-0"
+          title="Send message"
           aria-label="Send message"
         >
           <Send className="w-4 h-4 stroke-[2.5]" />

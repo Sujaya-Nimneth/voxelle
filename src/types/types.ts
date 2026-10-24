@@ -47,6 +47,8 @@ export type ChatStreamEvent =
   | {
       type: 'meta';
       provider: string;
+      /** Model identifier actually serving the request. */
+      model?: string;
       degraded?: boolean;
       reason?: string;
       /** Non-fatal advisory, e.g. an image the provider cannot consume. */

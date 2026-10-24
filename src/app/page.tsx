@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Menu, Trash2, Activity } from 'lucide-react';
+import { Menu, Activity } from 'lucide-react';
 import { useAssistant } from '@/hooks/useAssistant';
 import Sidebar from '@/components/Sidebar';
 import ActivityRail from '@/components/ActivityRail';
@@ -17,7 +17,11 @@ export default function Home() {
     messages,
     toolEvents,
     sessionEvents,
-    recentSignals,
+    conversations,
+    activeConversationId,
+    switchConversation,
+    deleteConversation,
+    newConversation,
     uploadedImage,
     setUploadedImage,
     sttError,
@@ -27,7 +31,6 @@ export default function Home() {
     toggleListening,
     sendTextMessage,
     retryLastMessage,
-    clearHistory,
     dismissToolEvent,
     stopSpeaking,
     speakMessage,
@@ -35,6 +38,7 @@ export default function Home() {
     autoSpeak,
     toggleAutoSpeak,
     activeProvider,
+    activeModel,
     isDegraded,
     degradedReason,
     voices,
@@ -44,9 +48,11 @@ export default function Home() {
 
   const [dismissedError, setDismissedError] = useState<string | null>(null);
   const [warningDismissed, setWarningDismissed] = useState(false);
-  const [activeNav, setActiveNav] = useState<'command' | 'automations' | 'tools'>('command');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isMobileRailOpen, setIsMobileRailOpen] = useState(false);
+  // Composer's image dropzone lives here so the empty-state "vision" card can
+  // open it too.
+  const [showDropzone, setShowDropzone] = useState(false);
 
   // Derive warning visibility cleanly without useEffect setState
   const hasNewError = sttError !== null && sttError !== dismissedError;
@@ -65,20 +71,44 @@ export default function Home() {
   const handleCloseRailMobile = useCallback(() => setIsMobileRailOpen(false), []);
   const handleSpeakText = useCallback((text: string) => speakMessage(text), [speakMessage]);
 
+  // The latest finalized assistant reply, announced politely to screen
+  // readers once it exists (streaming text is intentionally not announced
+  // per-token).
+  const lastReply = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === 'assistant' && !m.isStreaming && m.content) return m.content;
+    }
+    return '';
+  }, [messages]);
+
   return (
     <div className="min-h-screen relative overflow-hidden cyber-bg">
-      {/* Background Cyber Grid */}
+      {/* Background grid */}
       <div className="cyber-grid" />
 
-      {/* 3-Column Cyber Shell */}
+      {/* Keyboard users can jump straight to the composer */}
+      <a
+        href="#composer-input"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-2 focus:rounded-lg focus:bg-surface-2 focus:border focus:border-cyan-500/40 focus:text-sm focus:text-white"
+      >
+        Skip to message input
+      </a>
+
+      {/* Screen-reader announcement of completed replies */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {lastReply}
+      </div>
+
+      {/* 3-Column Shell */}
       <div className="cyber-shell min-h-screen">
-        {/* ─── Left Sidebar (262px) ─── */}
+        {/* ─── Left Sidebar (264px) ─── */}
         <Sidebar
-          recentSignals={recentSignals}
-          onSelectSignal={sendTextMessage}
-          onNewConversation={clearHistory}
-          activeNav={activeNav}
-          setActiveNav={setActiveNav}
+          conversations={conversations}
+          activeConversationId={activeConversationId}
+          onSwitchConversation={switchConversation}
+          onDeleteConversation={deleteConversation}
+          onNewConversation={newConversation}
           isOpenMobile={isMobileSidebarOpen}
           onCloseMobile={handleCloseSidebarMobile}
           autoSpeak={autoSpeak}
@@ -90,8 +120,8 @@ export default function Home() {
 
         {/* ─── Center Command Center ─── */}
         <main className="flex flex-col min-w-0 h-[100dvh] overflow-hidden">
-          {/* Header (82px) */}
-          <header className="h-[82px] px-6 sm:px-8 flex items-center justify-between border-b border-line flex-shrink-0 z-20 bg-[rgba(8,11,20,0.65)] backdrop-blur-md">
+          {/* Header */}
+          <header className="h-[60px] px-5 sm:px-8 flex items-center justify-between border-b border-line flex-shrink-0 z-20 bg-[rgba(8,11,20,0.6)] backdrop-blur-md">
             <div className="flex items-center gap-3">
               {/* Mobile Sidebar Toggle */}
               <button
@@ -102,8 +132,8 @@ export default function Home() {
                 <Menu className="w-5 h-5" />
               </button>
 
-              <div className="font-mono text-[11px] tracking-[0.4px] text-dim">
-                WORKSPACE / <b className="font-medium text-soft">COMMAND CENTER</b>
+              <div className="label">
+                Workspace / <span className="text-soft">Command Center</span>
               </div>
             </div>
 
@@ -111,19 +141,10 @@ export default function Home() {
               <StatusBadge
                 status={status}
                 provider={activeProvider}
+                model={activeModel}
                 isDegraded={isDegraded}
                 degradedReason={degradedReason}
               />
-
-              {/* Clear conversation action */}
-              <button
-                onClick={clearHistory}
-                className="hidden sm:flex items-center gap-1.5 p-2 rounded-lg text-muted hover:text-white hover:bg-white/5 transition-colors text-xs font-mono cursor-pointer"
-                title="Reset session history"
-                aria-label="Reset session history"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
 
               {/* Mobile Activity Rail Toggle */}
               <button
@@ -131,7 +152,7 @@ export default function Home() {
                 className="lg:hidden p-2 rounded-lg text-muted hover:text-white hover:bg-white/5 font-mono text-[10px] flex items-center gap-1.5 cursor-pointer border border-line"
                 aria-label="Open activity rail"
               >
-                <Activity className="w-3.5 h-3.5 text-lime" />
+                <Activity className="w-3.5 h-3.5 text-green" />
                 <span>LOG</span>
               </button>
             </div>
@@ -155,8 +176,11 @@ export default function Home() {
             isProcessing={status === 'processing' && !messages.some((m) => m.isStreaming)}
             isListening={isListening}
             interimTranscript={interimTranscript}
+            provider={activeProvider}
+            isDegraded={isDegraded}
             onSelectSuggestion={sendTextMessage}
             onStartVoice={toggleListening}
+            onAttachImage={() => setShowDropzone(true)}
             onRetry={retryLastMessage}
             onSpeakText={handleSpeakText}
           />
@@ -166,6 +190,8 @@ export default function Home() {
             status={status}
             sttSupported={sttSupported}
             uploadedImage={uploadedImage}
+            showDropzone={showDropzone}
+            onSetShowDropzone={setShowDropzone}
             onSetUploadedImage={setUploadedImage}
             onSendMessage={sendTextMessage}
             onToggleListening={toggleListening}

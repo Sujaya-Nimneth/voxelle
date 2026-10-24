@@ -4,8 +4,7 @@ import { useState, useEffect, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
-  Radio,
-  Sliders,
+  MessageSquare,
   Cpu,
   X,
   Sparkles,
@@ -15,19 +14,20 @@ import {
   Eye,
   Volume2,
   Mic,
-  Activity,
-  CheckCircle,
+  HardDrive,
+  Trash2,
 } from 'lucide-react';
 import Modal from './Modal';
 import { toolDefinitions } from '@/lib/tools';
 import type { SpeechSettings } from '@/hooks/useSpeechSynthesis';
+import type { ConversationMeta } from '@/hooks/useConversations';
 
 interface SidebarProps {
-  recentSignals: string[];
-  onSelectSignal: (signal: string) => void;
+  conversations: ConversationMeta[];
+  activeConversationId: string | null;
+  onSwitchConversation: (id: string) => void;
+  onDeleteConversation: (id: string) => void;
   onNewConversation: () => void;
-  activeNav: 'command' | 'automations' | 'tools';
-  setActiveNav: (nav: 'command' | 'automations' | 'tools') => void;
   isOpenMobile?: boolean;
   onCloseMobile?: () => void;
   // Settings props
@@ -38,14 +38,66 @@ interface SidebarProps {
   onUpdateTtsSettings?: (settings: Partial<SpeechSettings>) => void;
 }
 
-const SIDEBAR_WIDTH = 262;
+const SIDEBAR_WIDTH = 264;
+
+function formatRelativeTime(timestamp: number): string {
+  const diff = Date.now() - timestamp;
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 1) return 'now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? 'yesterday' : `${days}d ago`;
+}
+
+// Honest capability inventory: what each integration actually is, no
+// fictional "Online/Active" claims for things that don't exist.
+const CAPABILITIES = [
+  {
+    name: 'Calendar events',
+    desc: 'Executed server-side; produces a real .ics file you can download and import.',
+    icon: <Calendar className="w-4 h-4 text-cyan" />,
+    status: 'Live',
+  },
+  {
+    name: 'Smart home',
+    desc: 'Simulated — no device hub is connected. Results are labeled as simulated.',
+    icon: <Home className="w-4 h-4 text-violet" />,
+    status: 'Simulated',
+  },
+  {
+    name: 'Image analysis',
+    desc: 'Attach or paste images for visual questions (multimodal providers only).',
+    icon: <Eye className="w-4 h-4 text-cyan" />,
+    status: 'Live',
+  },
+  {
+    name: 'Speech recognition',
+    desc: 'Browser Web Speech API — Chrome, Edge, and Safari.',
+    icon: <Mic className="w-4 h-4 text-violet" />,
+    status: 'Browser',
+  },
+  {
+    name: 'Speech synthesis',
+    desc: 'Browser speech synthesis with sentence-bounded chunking for long replies.',
+    icon: <Volume2 className="w-4 h-4 text-cyan" />,
+    status: 'Browser',
+  },
+  {
+    name: 'Conversation memory',
+    desc: 'Threads are stored in this browser via localStorage — nothing else leaves your device except API calls.',
+    icon: <HardDrive className="w-4 h-4 text-violet" />,
+    status: 'Local',
+  },
+];
 
 function Sidebar({
-  recentSignals,
-  onSelectSignal,
+  conversations,
+  activeConversationId,
+  onSwitchConversation,
+  onDeleteConversation,
   onNewConversation,
-  activeNav,
-  setActiveNav,
   isOpenMobile = false,
   onCloseMobile,
   autoSpeak = true,
@@ -54,18 +106,11 @@ function Sidebar({
   ttsSettings,
   onUpdateTtsSettings,
 }: SidebarProps) {
-  const [showToolsModal, setShowToolsModal] = useState(false);
-  const [showAutomationsModal, setShowAutomationsModal] = useState(false);
+  const [showCapabilitiesModal, setShowCapabilitiesModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
-  const handleCloseTools = () => {
-    setShowToolsModal(false);
-    setActiveNav('command');
-  };
-
-  const handleCloseAutomations = () => {
-    setShowAutomationsModal(false);
-    setActiveNav('command');
+  const handleCloseCapabilities = () => {
+    setShowCapabilitiesModal(false);
   };
 
   // Mobile drawer behaves like a dialog: Escape closes it and the background
@@ -85,114 +130,113 @@ function Sidebar({
   }, [isOpenMobile, onCloseMobile]);
 
   const sidebarContent = (
-    <aside className="w-[262px] flex-shrink-0 flex flex-col justify-between h-full p-5 lg:py-7 lg:px-[18px] border-r border-line bg-[rgba(7,11,21,0.88)] backdrop-blur-2xl z-40">
+    <aside className="w-[264px] flex-shrink-0 flex flex-col h-full py-6 px-4 border-r border-line bg-[rgba(9,12,20,0.92)] backdrop-blur-2xl z-40">
       {/* Top Header & Brand */}
-      <div>
-        <div className="flex items-center justify-between px-2 mb-6">
-          <div className="flex items-center gap-2.5 font-extrabold tracking-tight text-[19px] text-white">
-            <div className="w-[34px] h-[34px] rounded-[10px] grid place-items-center text-ink glow-mark">
-              <Sparkles className="w-5 h-5 text-ink stroke-[2.5]" />
-            </div>
-            <span>VOXELLE</span>
+      <div className="flex items-center justify-between px-2 mb-5">
+        <div className="flex items-center gap-2.5 font-extrabold tracking-tight text-[18px] text-white">
+          <div className="w-[32px] h-[32px] rounded-[10px] grid place-items-center text-ink glow-mark">
+            <Sparkles className="w-[18px] h-[18px] text-ink stroke-[2.5]" />
           </div>
-          {onCloseMobile && (
-            <button
-              onClick={onCloseMobile}
-              className="lg:hidden p-1.5 rounded-lg text-muted hover:text-white cursor-pointer"
-              aria-label="Close sidebar"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+          <span>VOXELLE</span>
         </div>
-
-        {/* New Conversation Button */}
-        <button
-          onClick={onNewConversation}
-          className="w-full border border-[rgba(53,230,255,0.38)] text-[#c9faff] bg-gradient-to-r from-[rgba(24,147,181,0.2)] to-[rgba(123,89,240,0.16)] hover:from-[rgba(24,147,181,0.35)] hover:to-[rgba(123,89,240,0.28)] transition-all rounded-[12px] py-[12px] px-[14px] mb-7 text-left font-semibold text-[13px] flex items-center cursor-pointer shadow-[0_0_15px_rgba(53,230,255,0.08)] active:scale-[0.98]"
-        >
-          <Plus className="w-4 h-4 mr-2.5 text-cyan stroke-[2.5]" />
-          <span>New conversation</span>
-        </button>
-
-        {/* Workspace Navigation */}
-        <div className="text-dim font-mono text-[10px] tracking-[1.6px] uppercase px-[10px] pb-[10px] font-medium">
-          Workspace
-        </div>
-        <nav className="space-y-[2px]">
+        {onCloseMobile && (
           <button
-            onClick={() => setActiveNav('command')}
-            className={`w-full flex items-center gap-[11px] py-[10px] px-[10px] text-[13px] rounded-[9px] transition-all text-left cursor-pointer ${
-              activeNav === 'command'
-                ? 'text-text bg-gradient-to-r from-[rgba(47,226,255,0.12)] to-[rgba(110,104,255,0.04)] border border-[rgba(77,218,255,0.15)] font-medium shadow-[0_0_12px_rgba(47,226,255,0.05)]'
-                : 'text-dim hover:text-white hover:bg-white/[0.03]'
-            }`}
+            onClick={onCloseMobile}
+            className="lg:hidden p-1.5 rounded-lg text-muted hover:text-white cursor-pointer"
+            aria-label="Close sidebar"
           >
-            <Radio className="w-4 h-4 text-cyan flex-shrink-0" />
-            <span>Command center</span>
+            <X className="w-4 h-4" />
           </button>
+        )}
+      </div>
 
-          <button
-            onClick={() => {
-              setActiveNav('automations');
-              setShowAutomationsModal(true);
-            }}
-            className={`w-full flex items-center gap-[11px] py-[10px] px-[10px] text-[13px] rounded-[9px] transition-all text-left cursor-pointer ${
-              activeNav === 'automations'
-                ? 'text-text bg-gradient-to-r from-[rgba(47,226,255,0.12)] to-[rgba(110,104,255,0.04)] border border-[rgba(77,218,255,0.15)] font-medium'
-                : 'text-dim hover:text-white hover:bg-white/[0.03]'
-            }`}
-          >
-            <Sliders className="w-4 h-4 text-violet flex-shrink-0" />
-            <span>Automations</span>
-          </button>
+      {/* New Conversation Button */}
+      <button
+        onClick={() => {
+          onNewConversation();
+          onCloseMobile?.();
+        }}
+        className="w-full border border-cyan-500/30 text-cyan bg-cyan-500/[0.07] hover:bg-cyan-500/[0.14] active:scale-[0.98] transition-all rounded-[10px] py-2.5 px-3.5 mb-5 text-left font-semibold text-[13px] flex items-center cursor-pointer"
+      >
+        <Plus className="w-4 h-4 mr-2.5 stroke-[2.5]" />
+        <span>New conversation</span>
+      </button>
 
-          <button
-            onClick={() => {
-              setActiveNav('tools');
-              setShowToolsModal(true);
-            }}
-            className={`w-full flex items-center gap-[11px] py-[10px] px-[10px] text-[13px] rounded-[9px] transition-all text-left cursor-pointer ${
-              activeNav === 'tools'
-                ? 'text-text bg-gradient-to-r from-[rgba(47,226,255,0.12)] to-[rgba(110,104,255,0.04)] border border-[rgba(77,218,255,0.15)] font-medium'
-                : 'text-dim hover:text-white hover:bg-white/[0.03]'
-            }`}
-          >
-            <Cpu className="w-4 h-4 text-cyan flex-shrink-0" />
-            <span>Connected tools</span>
-            <span className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan border border-cyan-500/20">
-              {toolDefinitions.length}
-            </span>
-          </button>
-        </nav>
-
-        {/* Recent Signals / History */}
-        <div className="mt-[26px]">
-          <div className="text-dim font-mono text-[10px] tracking-[1.6px] uppercase px-[10px] pb-[10px] font-medium">
-            Recent signals
-          </div>
-          <div className="space-y-[3px]">
-            {recentSignals.map((signal, idx) => (
-              <button
-                key={`${signal}-${idx}`}
-                onClick={() => {
-                  onSelectSignal(signal);
-                  if (onCloseMobile) onCloseMobile();
-                }}
-                className="w-full text-left py-[9px] px-[10px] rounded-[8px] text-[12px] truncate transition-colors cursor-pointer text-dim hover:text-white hover:bg-white/[0.04]"
-                title={signal}
+      {/* Conversation Threads */}
+      <div className="flex-1 min-h-0 flex flex-col">
+        <div className="label px-2 pb-2">Conversations</div>
+        <div className="flex-1 overflow-y-auto space-y-0.5 pr-0.5">
+          {conversations.map((conv) => {
+            const isActive = conv.id === activeConversationId;
+            return (
+              <div
+                key={conv.id}
+                className={`group relative rounded-[9px] transition-colors ${
+                  isActive
+                    ? 'bg-cyan-500/[0.09] border border-cyan-500/20'
+                    : 'hover:bg-white/[0.04] border border-transparent'
+                }`}
               >
-                {signal}
-              </button>
-            ))}
-          </div>
+                <button
+                  onClick={() => {
+                    onSwitchConversation(conv.id);
+                    onCloseMobile?.();
+                  }}
+                  className="w-full flex items-start gap-2.5 py-2.5 px-2.5 pr-8 text-left cursor-pointer"
+                  aria-current={isActive ? 'true' : undefined}
+                >
+                  <MessageSquare
+                    className={`w-3.5 h-3.5 mt-[3px] flex-shrink-0 ${isActive ? 'text-cyan' : 'text-muted'}`}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className={`block text-[12.5px] leading-snug truncate ${
+                        isActive ? 'text-text font-medium' : 'text-soft'
+                      }`}
+                    >
+                      {conv.title}
+                    </span>
+                    <span className="block text-[10px] font-mono text-muted mt-0.5">
+                      {formatRelativeTime(conv.updatedAt)}
+                    </span>
+                  </span>
+                </button>
+                <button
+                  onClick={() => onDeleteConversation(conv.id)}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded text-muted hover:text-danger hover:bg-white/5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity cursor-pointer"
+                  aria-label={`Delete conversation: ${conv.title}`}
+                  title="Delete conversation"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
 
+      {/* Navigation */}
+      <div className="mt-5 space-y-0.5">
+        <div className="label px-2 pb-2">Workspace</div>
+        <button
+          onClick={() => {
+            setShowCapabilitiesModal(true);
+            onCloseMobile?.();
+          }}
+          className="w-full flex items-center gap-2.5 py-2 px-2.5 text-[13px] rounded-[9px] transition-colors text-left cursor-pointer text-dim hover:text-white hover:bg-white/[0.04]"
+        >
+          <Cpu className="w-4 h-4 text-cyan flex-shrink-0" />
+          <span>Capabilities</span>
+          <span className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan border border-cyan-500/20">
+            {toolDefinitions.length}
+          </span>
+        </button>
+      </div>
+
       {/* Bottom Profile & Settings Pill */}
-      <div className="p-3 flex items-center justify-between border border-line bg-[rgba(19,27,43,0.72)] rounded-[12px] mt-6">
+      <div className="mt-4 p-3 flex items-center justify-between border border-line bg-[rgba(17,23,38,0.7)] rounded-[10px]">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-[30px] h-[30px] rounded-[9px] grid place-items-center bg-gradient-to-br from-[#f4c898] to-[#9d6bff] text-[#15111b] font-extrabold text-[12px] flex-shrink-0 shadow-[0_0_12px_rgba(157,107,255,0.25)]">
+          <div className="w-[28px] h-[28px] rounded-[9px] grid place-items-center bg-gradient-to-br from-cyan to-violet text-ink font-extrabold text-[11px] flex-shrink-0">
             V
           </div>
           <div className="min-w-0">
@@ -200,7 +244,7 @@ function Sidebar({
               Personal workspace
             </div>
             <span className="block text-[10px] text-dim font-mono truncate">
-              {`Pro · ${toolDefinitions.length} tools online`}
+              History stays in this browser
             </span>
           </div>
         </div>
@@ -223,82 +267,38 @@ function Sidebar({
   // duplicated content stacked two identical dialogs with duplicate ids.
   const modals = (
     <>
-      {/* Connected Tools Modal with Portal */}
+      {/* Capabilities Modal — what the app can actually do */}
       <Modal
-        isOpen={showToolsModal}
-        onClose={handleCloseTools}
-        title="Connected Tools"
+        isOpen={showCapabilitiesModal}
+        onClose={handleCloseCapabilities}
+        title="Capabilities"
         icon={<Cpu className="w-5 h-5 text-cyan" />}
         footer={
           <button
             type="button"
-            onClick={handleCloseTools}
-            className="px-5 py-2 text-xs font-semibold text-white rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 cursor-pointer transition-all shadow-[0_0_15px_rgba(53,230,255,0.15)]"
+            onClick={handleCloseCapabilities}
+            className="px-5 py-2 text-xs font-semibold text-white rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/35 cursor-pointer transition-colors"
           >
             Done
           </button>
         }
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto pr-1">
-          {[
-            { name: 'Calendar Sync', desc: 'Google / Apple Calendar scheduling', icon: <Calendar className="w-4 h-4 text-cyan-400" />, status: 'Online' },
-            { name: 'Smart Home Hub', desc: 'Lights, HVAC, appliances automation', icon: <Home className="w-4 h-4 text-violet-400" />, status: 'Active' },
-            { name: 'Multimodal Vision', desc: 'Visual recognition & scene analysis', icon: <Eye className="w-4 h-4 text-lime-400" />, status: 'Ready' },
-            { name: 'Voice Synthesis', desc: 'Natural text-to-speech engine', icon: <Volume2 className="w-4 h-4 text-cyan-400" />, status: 'Active' },
-            { name: 'Speech Recognition', desc: 'Real-time low latency STT', icon: <Mic className="w-4 h-4 text-violet-400" />, status: 'Active' },
-            { name: 'Automations Engine', desc: 'Scheduled routines and triggers', icon: <Sliders className="w-4 h-4 text-lime-400" />, status: 'Online' },
-            { name: 'Session Memory', desc: 'Encrypted local state storage', icon: <CheckCircle className="w-4 h-4 text-cyan-400" />, status: 'Encrypted' },
-            { name: 'System Telemetry', desc: 'Live event stream & health check', icon: <Activity className="w-4 h-4 text-violet-400" />, status: 'Optimal' },
-          ].map((t, i) => (
-            <div key={i} className="p-3 rounded-xl bg-white/[0.02] border border-line flex flex-col justify-between">
+          {CAPABILITIES.map((c) => (
+            <div
+              key={c.name}
+              className="p-3 rounded-xl bg-white/[0.02] border border-line flex flex-col justify-between"
+            >
               <div className="flex items-start justify-between">
-                <span className="p-2 rounded-lg bg-white/5 border border-white/5">{t.icon}</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[rgba(181,245,111,0.1)] text-lime border border-lime-400/20">
-                  {t.status}
+                <span className="p-2 rounded-lg bg-white/5 border border-white/5">{c.icon}</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.04] text-dim border border-white/10">
+                  {c.status}
                 </span>
               </div>
               <div className="mt-3">
-                <div className="text-xs font-semibold text-white">{t.name}</div>
-                <div className="text-[11px] text-muted mt-0.5">{t.desc}</div>
+                <div className="text-xs font-semibold text-white">{c.name}</div>
+                <div className="text-[11px] text-muted mt-0.5 leading-relaxed">{c.desc}</div>
               </div>
-            </div>
-          ))}
-        </div>
-      </Modal>
-
-      {/* Automations Modal with Portal */}
-      <Modal
-        isOpen={showAutomationsModal}
-        onClose={handleCloseAutomations}
-        title="Automations & Scenes"
-        borderColor="rgba(146,108,255,0.3)"
-        icon={<Sliders className="w-5 h-5 text-violet" />}
-        footer={
-          <button
-            type="button"
-            onClick={handleCloseAutomations}
-            className="px-5 py-2 text-xs font-semibold text-white rounded-lg bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/40 cursor-pointer transition-all shadow-[0_0_15px_rgba(146,108,255,0.15)]"
-          >
-            Done
-          </button>
-        }
-      >
-        <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
-          {[
-            { title: 'Morning Workspace Sync', trigger: '08:30 AM Daily', desc: 'Turn on studio lights, briefing, unread review' },
-            { title: 'Focus Deep Work Routine', trigger: 'Voice keyword: "Focus mode"', desc: 'Dim peripheral lights, engage DND, start 90m block' },
-            { title: 'Evening Ambient Scene', trigger: 'Sunset / Voice', desc: 'Warm color temperature, adjust thermostat to 70°F' },
-            { title: 'Auto Calendar Buffer', trigger: 'Every event booking', desc: 'Reserve 10-minute prep buffer automatically' },
-          ].map((a, i) => (
-            <div key={i} className="p-3 rounded-xl bg-white/[0.02] border border-line flex items-center justify-between">
-              <div>
-                <div className="text-xs font-semibold text-white">{a.title}</div>
-                <div className="text-[11px] text-muted mt-0.5">{a.desc}</div>
-                <div className="text-[10px] font-mono text-violet mt-1">{a.trigger}</div>
-              </div>
-              <span className="text-[11px] font-mono text-lime px-2 py-1 rounded-full bg-lime-400/10 border border-lime-400/20">
-                Active
-              </span>
             </div>
           ))}
         </div>
@@ -314,9 +314,9 @@ function Sidebar({
           <button
             type="button"
             onClick={() => setShowSettingsModal(false)}
-            className="px-5 py-2 text-xs font-semibold text-white rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 cursor-pointer transition-all shadow-[0_0_15px_rgba(53,230,255,0.15)]"
+            className="px-5 py-2 text-xs font-semibold text-white rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/35 cursor-pointer transition-colors"
           >
-            Save & Close
+            Done
           </button>
         }
       >

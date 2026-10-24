@@ -84,9 +84,7 @@ function ActivityRail({
         {/* Rail Header */}
         <div className="flex items-center justify-between pb-1">
           <div className="flex items-center gap-2">
-            <h2 className="font-mono text-[11px] tracking-[1.3px] font-medium text-soft">
-              LIVE ACTIVITY
-            </h2>
+            <h2 className="label text-soft!">Session</h2>
             {onCloseMobile && (
               <button
                 onClick={onCloseMobile}
@@ -97,9 +95,9 @@ function ActivityRail({
               </button>
             )}
           </div>
-          <div className="flex items-center gap-1.5 font-mono text-[10px] text-lime font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-lime glow-lime animate-pulse" />
-            <span>LIVE</span>
+          <div className="flex items-center gap-1.5 font-mono text-[10px] text-green font-medium">
+            <span className="w-1.5 h-1.5 rounded-full bg-green glow-green animate-pulse" aria-hidden="true" />
+            <span className="sr-only">Live</span>
           </div>
         </div>
 
@@ -127,9 +125,7 @@ function ActivityRail({
               exit={{ opacity: 0, height: 0 }}
               className="mb-5 space-y-2"
             >
-              <div className="font-mono text-[10px] tracking-[1.2px] text-cyan font-medium uppercase px-0.5">
-                Active Tool Telemetry
-              </div>
+              <div className="label text-cyan! px-0.5">Tool Activity</div>
               {toolEvents.map((te) => (
                 <div
                   key={te.id}
@@ -164,7 +160,7 @@ function ActivityRail({
                   <p className="text-[11px] text-soft mt-1.5 font-mono flex items-start gap-1">
                     {te.toolCall.status === 'completed' && (
                       <CheckCircle2
-                        className={`w-3 h-3 flex-shrink-0 mt-[3px] ${te.simulated ? 'text-warning' : 'text-lime'}`}
+                        className={`w-3 h-3 flex-shrink-0 mt-[3px] ${te.simulated ? 'text-warning' : 'text-green'}`}
                       />
                     )}
                     <span>
@@ -201,9 +197,7 @@ function ActivityRail({
 
         {/* Session Log */}
         <div className="mt-2">
-          <div className="font-mono text-[10px] tracking-[1.2px] text-dim font-medium uppercase mb-2.5 px-0.5">
-            SESSION LOG
-          </div>
+          <div className="label mb-2.5 px-0.5">Event Log</div>
 
           <div className="space-y-[9px]">
             {sessionEvents.map((event) => {
@@ -221,7 +215,7 @@ function ActivityRail({
                       isWarn
                         ? 'bg-warning shadow-[0_0_9px_var(--warning)]'
                         : isSuccess
-                        ? 'bg-lime shadow-[0_0_9px_var(--lime)]'
+                        ? 'bg-green shadow-[0_0_9px_var(--green)]'
                         : 'bg-cyan shadow-[0_0_9px_var(--cyan)]'
                     }`}
                   />

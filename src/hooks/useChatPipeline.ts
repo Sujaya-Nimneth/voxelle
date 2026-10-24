@@ -13,8 +13,6 @@ export interface ChatPipelineDeps {
     subtitle: string,
     eventStatus?: 'normal' | 'warn' | 'success'
   ) => void;
-  /** Records a successfully dispatched user prompt for the sidebar list. */
-  recordSignal: (text: string) => void;
   speak: (text: string, onEnd?: () => void) => void;
   stopSpeaking: () => void;
   autoSpeak: boolean;
@@ -29,7 +27,6 @@ export interface ChatPipelineDeps {
  */
 export function useChatPipeline({
   addSessionEvent,
-  recordSignal,
   speak,
   stopSpeaking,
   autoSpeak,
@@ -40,6 +37,7 @@ export function useChatPipeline({
   const [toolEvents, setToolEvents] = useState<ToolEvent[]>([]);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [activeProvider, setActiveProvider] = useState<string>('mock');
+  const [activeModel, setActiveModel] = useState<string>('');
   const [isDegraded, setIsDegraded] = useState(false);
   const [degradedReason, setDegradedReason] = useState<string | null>(null);
 
@@ -142,8 +140,6 @@ export function useChatPipeline({
           return idx === -1 ? prev : prev.slice(0, idx + 1);
         });
       } else {
-        recordSignal(userText);
-
         userMessage = {
           id: generateId(),
           role: 'user',
@@ -221,6 +217,7 @@ export function useChatPipeline({
           },
           onMeta: (meta) => {
             if (meta.provider) setActiveProvider(meta.provider);
+            if (meta.model) setActiveModel(meta.model);
             if (meta.degraded !== undefined) {
               setIsDegraded(meta.degraded);
               setDegradedReason(meta.degraded ? meta.reason ?? null : null);
@@ -401,7 +398,7 @@ export function useChatPipeline({
         addSessionEvent('Signal interrupted', 'RETRY AVAILABLE', 'warn');
       }
     },
-    [autoSpeak, ttsSupported, speak, stopSpeaking, addSessionEvent, recordSignal, appendSystemError]
+    [autoSpeak, ttsSupported, speak, stopSpeaking, addSessionEvent, appendSystemError]
   );
 
   // Retry the last user prompt if failed — reuses the existing turn rather
@@ -468,6 +465,7 @@ export function useChatPipeline({
     uploadedImage,
     setUploadedImage: handleSetUploadedImage,
     activeProvider,
+    activeModel,
     isDegraded,
     degradedReason,
     processMessage,

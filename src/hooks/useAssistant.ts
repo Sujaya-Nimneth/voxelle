@@ -1,92 +1,28 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useSpeechRecognition } from './useSpeechRecognition';
 import { useSpeechSynthesis } from './useSpeechSynthesis';
-import { useSessionEvents, createInitialSessionEvents } from './useSessionEvents';
+import { useSessionEvents } from './useSessionEvents';
 import { useChatPipeline } from './useChatPipeline';
-import type { Message } from '@/types/types';
+import { useConversations } from './useConversations';
 
-const STORAGE_KEY = 'voxelle_chat_history';
-const SIGNALS_KEY = 'voxelle_recent_signals';
 const AUTOSPEAK_KEY = 'voxelle_auto_speak';
 
-const DEFAULT_SIGNALS = [
-  "Plan tomorrow's schedule",
-  'Research briefing: TimesFM',
-  'Set up focus routine',
-  'Smart home evening scene',
-];
-
-function loadMessagesFromStorage(): Message[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed)) return parsed;
-    }
-  } catch {
-    // Ignore storage parse errors
-  }
-  return [];
-}
-
-function saveMessages(messages: Message[]) {
-  if (typeof window === 'undefined') return;
-  try {
-    // Strip heavy base64 image strings from persistent storage to prevent 5MB
-    // localStorage quota crash, and drop system error banners: they describe a
-    // transient failure and shouldn't resurface after a reload.
-    const sanitized = messages
-      .filter((m) => m.role !== 'system')
-      .slice(-50)
-      .map((m) => {
-        const copy = { ...m };
-        delete copy.isStreaming; // transient render flag, never persisted
-        if (copy.image && copy.image.length > 500) {
-          copy.image = undefined;
-        }
-        return copy;
-      });
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
-  } catch (err) {
-    console.warn('Could not persist messages to localStorage:', err);
-  }
-}
-
-function loadSignalsFromStorage(): string[] {
-  if (typeof window === 'undefined') return DEFAULT_SIGNALS;
-  try {
-    const stored = localStorage.getItem(SIGNALS_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch {
-    // Ignore parse errors
-  }
-  return DEFAULT_SIGNALS;
-}
-
-function saveSignals(signals: string[]) {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(SIGNALS_KEY, JSON.stringify(signals));
-  } catch {
-    // Ignore storage errors
-  }
-}
-
 /**
- * Composes the assistant: browser speech hooks, session telemetry, the chat
- * pipeline, and localStorage persistence. Page components consume only this
- * hook's stable API.
+ * Composes the assistant: browser speech hooks, session telemetry,
+ * multi-conversation storage, and the chat pipeline. Page components consume
+ * only this hook's stable API.
  */
 export function useAssistant() {
   const [hydrated, setHydrated] = useState(false);
-  const [recentSignals, setRecentSignals] = useState<string[]>(DEFAULT_SIGNALS);
   const [autoSpeak, setAutoSpeak] = useState(true);
+
+  // While a thread switch is loading stored messages into the pipeline,
+  // persistence is suppressed so the outgoing thread's messages can't be
+  // written over the incoming one.
+  const loadingThreadRef = useRef(false);
+  const initialLoadRef = useRef(false);
 
   // Hook integrations
   const {
@@ -110,62 +46,56 @@ export function useAssistant() {
     updateSettings: updateTtsSettings,
   } = useSpeechSynthesis();
 
-  const { sessionEvents, setSessionEvents, addSessionEvent } = useSessionEvents();
-
-  const recordSignal = useCallback((text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed || trimmed.length > 40) return;
-    setRecentSignals((prev) => {
-      const filtered = prev.filter((s) => s.toLowerCase() !== trimmed.toLowerCase());
-      return [trimmed, ...filtered].slice(0, 6);
-    });
-  }, []);
+  const { sessionEvents, addSessionEvent } = useSessionEvents();
+  const conversations = useConversations();
 
   const pipeline = useChatPipeline({
     addSessionEvent,
-    recordSignal,
     speak,
     stopSpeaking,
     autoSpeak,
     ttsSupported,
   });
 
-  // Hydrate from localStorage on client mount
+  // One-time load of the active thread once conversations hydrate.
   useEffect(() => {
-    const stored = loadMessagesFromStorage();
+    if (initialLoadRef.current || !conversations.activeId) return;
+    initialLoadRef.current = true;
+    loadingThreadRef.current = true;
+    const stored = conversations.readActive();
     if (stored.length > 0) {
       pipeline.setMessages(stored);
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate from external storage
-    setRecentSignals(loadSignalsFromStorage());
+    setHydrated(true);
+    // Re-enable persistence after the load's render effects have settled.
+    setTimeout(() => {
+      loadingThreadRef.current = false;
+    }, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-time load
+  }, [conversations.activeId]);
 
+  // Persist the active thread whenever its messages change. persistActive
+  // keeps a stable identity (it delegates through a ref), so this effect
+  // runs on message changes — not every render.
+  const persistActive = conversations.persistActive;
+  useEffect(() => {
+    if (hydrated && !loadingThreadRef.current) {
+      persistActive(pipeline.messages);
+    }
+  }, [pipeline.messages, hydrated, persistActive]);
+
+  // Hydrate the auto-speak preference.
+  useEffect(() => {
     try {
       const storedAutoSpeak = localStorage.getItem(AUTOSPEAK_KEY);
       if (storedAutoSpeak !== null) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate from external storage
         setAutoSpeak(storedAutoSpeak === 'true');
       }
     } catch {
       // Ignore
     }
-
-    setSessionEvents(createInitialSessionEvents(Date.now()));
-
-    setHydrated(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only hydration
   }, []);
-
-  // Persist messages & auto-speak setting
-  useEffect(() => {
-    if (hydrated) {
-      saveMessages(pipeline.messages);
-    }
-  }, [pipeline.messages, hydrated]);
-
-  useEffect(() => {
-    if (hydrated) {
-      saveSignals(recentSignals);
-    }
-  }, [recentSignals, hydrated]);
 
   const toggleAutoSpeak = useCallback(() => {
     setAutoSpeak((prev) => {
@@ -178,6 +108,47 @@ export function useAssistant() {
       return next;
     });
   }, []);
+
+  const handleSwitchConversation = useCallback(
+    (id: string) => {
+      if (id === conversations.activeId) return;
+      loadingThreadRef.current = true;
+      stopSpeaking();
+      pipeline.resetConversation();
+      pipeline.setMessages(conversations.readActive(id));
+      conversations.switchTo(id);
+      setTimeout(() => {
+        loadingThreadRef.current = false;
+      }, 0);
+    },
+    [conversations, pipeline, stopSpeaking]
+  );
+
+  const handleNewConversation = useCallback(() => {
+    loadingThreadRef.current = true;
+    stopSpeaking();
+    pipeline.resetConversation();
+    conversations.createNew();
+    setTimeout(() => {
+      loadingThreadRef.current = false;
+    }, 0);
+  }, [conversations, pipeline, stopSpeaking]);
+
+  const handleDeleteConversation = useCallback(
+    (id: string) => {
+      const wasActive = id === conversations.activeId;
+      const remaining = conversations.conversations.filter((c) => c.id !== id);
+      conversations.remove(id);
+      if (wasActive) {
+        if (remaining.length > 0) {
+          handleSwitchConversation(remaining[0].id);
+        } else {
+          handleNewConversation();
+        }
+      }
+    },
+    [conversations, handleSwitchConversation, handleNewConversation]
+  );
 
   // Watch speech recognition transcript
   useEffect(() => {
@@ -222,22 +193,17 @@ export function useAssistant() {
     }
   }, [isListening, startListening, stopListening, stopSpeaking, addSessionEvent]);
 
-  const clearHistory = useCallback(() => {
-    pipeline.resetConversation();
-    stopSpeaking();
-    stopListening();
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(STORAGE_KEY);
-    }
-    addSessionEvent('Session log reset', 'COMMAND CENTER READY', 'normal');
-  }, [pipeline, stopSpeaking, stopListening, addSessionEvent]);
-
   return {
     status: pipeline.status,
     messages: pipeline.messages,
     toolEvents: pipeline.toolEvents,
     sessionEvents,
-    recentSignals,
+    // Threads
+    conversations: conversations.conversations,
+    activeConversationId: conversations.activeId,
+    switchConversation: handleSwitchConversation,
+    newConversation: handleNewConversation,
+    deleteConversation: handleDeleteConversation,
     uploadedImage: pipeline.uploadedImage,
     setUploadedImage: pipeline.setUploadedImage,
     sttError,
@@ -247,7 +213,6 @@ export function useAssistant() {
     toggleListening,
     sendTextMessage: pipeline.sendTextMessage,
     retryLastMessage: pipeline.retryLastMessage,
-    clearHistory,
     dismissToolEvent: pipeline.dismissToolEvent,
     stopSpeaking,
     speakMessage: pipeline.speakMessage,
@@ -255,6 +220,7 @@ export function useAssistant() {
     autoSpeak,
     toggleAutoSpeak,
     activeProvider: pipeline.activeProvider,
+    activeModel: pipeline.activeModel,
     isDegraded: pipeline.isDegraded,
     degradedReason: pipeline.degradedReason,
     voices,

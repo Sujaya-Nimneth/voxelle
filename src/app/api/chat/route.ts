@@ -297,7 +297,7 @@ async function* streamMock(
         toolCalls: undefined,
       };
 
-  yield { type: 'meta', provider: 'mock', degraded, reason: degradedReason };
+  yield { type: 'meta', provider: 'mock', model: 'demo engine', degraded, reason: degradedReason };
 
   if (result.toolCalls) {
     // Demo mode runs the same server-side executors as live providers — the
@@ -457,7 +457,7 @@ async function* streamGemini(
     // Echoed model turn for the round-trip: text and functionCall parts.
     const modelParts: GeminiPart[] = [];
 
-    yield { type: 'meta', provider: 'gemini', degraded: false };
+    yield { type: 'meta', provider: 'gemini', model: GEMINI_MODEL, degraded: false };
 
     for await (const item of geminiTurn(contents, signal(), true)) {
       if (item.finishReason) finishReason = item.finishReason;
@@ -657,6 +657,7 @@ async function* streamGroq(
     yield {
       type: 'meta',
       provider: 'groq',
+      model: GROQ_MODEL,
       degraded: false,
       notice: options?.droppedImage
         ? 'This text-only provider cannot see the attached image; it was not sent.'
