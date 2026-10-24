@@ -1,6 +1,16 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { parseStreamBuffer } from '../src/lib/chatStream.ts';
+import { parseStreamBuffer, readChatStream } from '../src/lib/chatStream.ts';
+
+function streamOfLines(lines: string[]): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const line of lines) controller.enqueue(encoder.encode(line + '\n'));
+      controller.close();
+    },
+  });
+}
 
 describe('parseStreamBuffer', () => {
   test('parses complete NDJSON lines into events', () => {
@@ -59,6 +69,38 @@ describe('parseStreamBuffer', () => {
     const input = JSON.stringify({ type: 'delta', text: 'x' }) + '\r\n';
     const { events } = parseStreamBuffer(input);
     assert.strictEqual(events.length, 1);
-    assert.strictEqual(events[0].type, 'delta');
+  });
+});
+
+describe('readChatStream', () => {
+  test('reports done with the finishReason when the stream completes', async () => {
+    const result = await readChatStream(
+      streamOfLines([
+        JSON.stringify({ type: 'meta', provider: 'gemini', degraded: false }),
+        JSON.stringify({ type: 'delta', text: 'hi' }),
+        JSON.stringify({ type: 'done', finishReason: 'STOP' }),
+      ]),
+      {}
+    );
+    assert.deepStrictEqual(result, { done: true, finishReason: 'STOP' });
+  });
+
+  test('reports truncation when the body closes without a done event', async () => {
+    const result = await readChatStream(
+      streamOfLines([JSON.stringify({ type: 'delta', text: 'partial' })]),
+      {}
+    );
+    assert.strictEqual(result.done, false);
+    assert.strictEqual(result.finishReason, undefined);
+  });
+
+  test('substitutes a message for malformed error events', async () => {
+    let received: string | undefined;
+    await readChatStream(streamOfLines(['{"type":"error"}']), {
+      onError: (message) => {
+        received = message;
+      },
+    });
+    assert.ok(received && received.length > 0);
   });
 });

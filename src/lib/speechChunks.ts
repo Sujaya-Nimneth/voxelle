@@ -22,6 +22,9 @@ export function chunkTextForSpeech(text: string, maxLength = DEFAULT_MAX_CHUNK_L
       const spaceIdx = remaining.lastIndexOf(' ', maxLength);
       cut = spaceIdx > 0 ? spaceIdx + 1 : maxLength;
     }
+    // A separator landing at the very end of the window can push cut one
+    // past the cap; clamp so no chunk exceeds maxLength.
+    if (cut > maxLength) cut = maxLength;
     const chunk = remaining.slice(0, cut).trim();
     if (chunk) chunks.push(chunk);
     remaining = remaining.slice(cut).trim();

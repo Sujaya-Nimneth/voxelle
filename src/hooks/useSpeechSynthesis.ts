@@ -51,6 +51,16 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
 
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const currentUtteranceIdRef = useRef<number>(0);
+  // Chrome sometimes never fires onstart/onend (hung engine or remote voice);
+  // the watchdog force-finishes so `isSpeaking` can't wedge at true forever.
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearWatchdog = useCallback(() => {
+    if (watchdogRef.current) {
+      clearTimeout(watchdogRef.current);
+      watchdogRef.current = null;
+    }
+  }, []);
 
   // Refs mirror voices/settings so `speak` keeps a stable identity: it sits in
   // the dependency chain of processMessage -> sendTextMessage, and rebuilding
@@ -81,9 +91,10 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
 
     return () => {
       window.speechSynthesis.removeEventListener('voiceschanged', updateVoices);
+      clearWatchdog();
       window.speechSynthesis.cancel();
     };
-  }, []);
+  }, [clearWatchdog]);
 
   const updateSettings = useCallback((newSettings: Partial<SpeechSettings>) => {
     setSettings((prev) => ({ ...prev, ...newSettings }));
@@ -171,72 +182,104 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
       }
 
       const finish = () => {
+        clearWatchdog();
         setIsSpeaking(false);
         onEnd?.();
       };
 
-      chunks.forEach((chunk, index) => {
-        const isLast = index === chunks.length - 1;
-        const utterance = new SpeechSynthesisUtterance(chunk);
-        if (index === 0) {
-          utteranceRef.current = utterance;
-        }
-
-        if (chosenVoice) {
-          utterance.voice = chosenVoice;
-        }
-        utterance.rate = currentSettings.rate;
-        utterance.pitch = currentSettings.pitch;
-        utterance.volume = currentSettings.volume;
-
-        utterance.onstart = () => {
-          if (currentUtteranceIdRef.current === utteranceId && index === 0) {
-            setIsSpeaking(true);
-          }
-        };
-
-        utterance.onerror = (event) => {
+      // ~120ms per char is a generous upper bound on speech rate (~8 chars/s);
+      // the floor covers very short chunks and engine startup.
+      const armWatchdog = (ms: number) => {
+        clearWatchdog();
+        watchdogRef.current = setTimeout(() => {
           if (currentUtteranceIdRef.current !== utteranceId) return;
-          if (event.error !== 'interrupted' && event.error !== 'canceled') {
-            console.warn('Speech synthesis notice:', event.error);
-          }
-          if (!isLast) {
-            // A failed middle chunk aborts the remaining queue
-            currentUtteranceIdRef.current++;
+          // Invalidate the hung queue so its stray events are ignored.
+          currentUtteranceIdRef.current++;
+          try {
             window.speechSynthesis.cancel();
+          } catch {
+            // Engine already gone
           }
           finish();
-        };
+        }, ms);
+      };
 
-        if (isLast) {
-          utterance.onend = () => {
+      const queueChunks = () => {
+        if (currentUtteranceIdRef.current !== utteranceId) return;
+
+        chunks.forEach((chunk, index) => {
+          const isLast = index === chunks.length - 1;
+          const utterance = new SpeechSynthesisUtterance(chunk);
+          if (index === 0) {
+            utteranceRef.current = utterance;
+          }
+
+          if (chosenVoice) {
+            utterance.voice = chosenVoice;
+          }
+          utterance.rate = currentSettings.rate;
+          utterance.pitch = currentSettings.pitch;
+          utterance.volume = currentSettings.volume;
+
+          utterance.onstart = () => {
+            if (currentUtteranceIdRef.current !== utteranceId) return;
+            if (index === 0) {
+              setIsSpeaking(true);
+            }
+            armWatchdog(Math.max(10_000, chunk.length * 120));
+          };
+
+          utterance.onerror = (event) => {
+            if (currentUtteranceIdRef.current !== utteranceId) return;
+            if (event.error !== 'interrupted' && event.error !== 'canceled') {
+              console.warn('Speech synthesis notice:', event.error);
+            }
+            if (!isLast) {
+              // A failed middle chunk aborts the remaining queue
+              currentUtteranceIdRef.current++;
+              window.speechSynthesis.cancel();
+            }
+            finish();
+          };
+
+          if (isLast) {
+            utterance.onend = () => {
+              if (currentUtteranceIdRef.current === utteranceId) {
+                finish();
+              }
+            };
+          }
+
+          try {
+            window.speechSynthesis.speak(utterance);
+          } catch (err) {
+            console.warn('Failed to initiate speech synthesis:', err);
             if (currentUtteranceIdRef.current === utteranceId) {
+              currentUtteranceIdRef.current++;
+              window.speechSynthesis.cancel();
               finish();
             }
-          };
-        }
-
-        try {
-          window.speechSynthesis.speak(utterance);
-        } catch (err) {
-          console.warn('Failed to initiate speech synthesis:', err);
-          if (currentUtteranceIdRef.current === utteranceId) {
-            currentUtteranceIdRef.current++;
-            window.speechSynthesis.cancel();
-            finish();
           }
-        }
-      });
+        });
+
+        // If no chunk ever reports onstart (silent engine hang), still finish.
+        armWatchdog(8_000);
+      };
+
+      // Chrome intermittently drops utterances queued in the same tick as a
+      // cancel(); deferring the queue by a macrotask dodges the race.
+      setTimeout(queueChunks, 50);
     },
-    [isSupported]
+    [isSupported, clearWatchdog]
   );
 
   const stop = useCallback(() => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     currentUtteranceIdRef.current++;
+    clearWatchdog();
     window.speechSynthesis.cancel();
     setIsSpeaking(false);
-  }, []);
+  }, [clearWatchdog]);
 
   return {
     speak,

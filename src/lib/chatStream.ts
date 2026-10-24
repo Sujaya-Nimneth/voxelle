@@ -34,15 +34,23 @@ export function parseStreamBuffer(buffer: string): {
   return { events, rest };
 }
 
+export interface ChatStreamResult {
+  /** False when the body closed without a `done` event — the reply is truncated. */
+  done: boolean;
+  finishReason?: string;
+}
+
 // Consumes an NDJSON chat stream from a fetch body, dispatching events until
-// `done` arrives or the stream closes.
+// `done` arrives or the stream closes. The result says whether `done` actually
+// arrived: a body that ends early means the reply was cut off mid-generation.
 export async function readChatStream(
   body: ReadableStream<Uint8Array>,
   handlers: ChatStreamHandlers
-): Promise<void> {
+): Promise<ChatStreamResult> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let result: ChatStreamResult = { done: false };
 
   try {
     while (true) {
@@ -68,15 +76,19 @@ export async function readChatStream(
             }
             break;
           case 'error':
-            handlers.onError?.(event.message);
+            // A parseable-but-malformed line may carry no message; never
+            // propagate undefined into caller checks.
+            handlers.onError?.(event.message || 'The assistant stream reported an error.');
             break;
           case 'done':
+            result = { done: true, finishReason: event.finishReason };
             handlers.onDone?.();
-            return;
+            return result;
         }
       }
     }
   } finally {
     reader.releaseLock();
   }
+  return result;
 }

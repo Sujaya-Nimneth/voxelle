@@ -249,13 +249,19 @@ export function useAssistant() {
     });
   }, []);
 
-  // Handle image upload with auto-downscaling
+  // Handle image upload with auto-downscaling. A monotonic token guards the
+  // async optimization: two rapid selections can't resolve out of order and
+  // clobber the newer pick with a stale result.
+  const imageOptimizeSeqRef = useRef(0);
   const handleSetUploadedImage = useCallback(async (image: string | null) => {
     if (!image) {
+      imageOptimizeSeqRef.current++;
       setUploadedImage(null);
       return;
     }
+    const seq = ++imageOptimizeSeqRef.current;
     const optimized = await optimizeImage(image);
+    if (seq !== imageOptimizeSeqRef.current) return;
     setUploadedImage(optimized);
   }, []);
 
@@ -308,15 +314,21 @@ export function useAssistant() {
 
       if (isRetry) {
         // Reuse the existing user turn (and its image) instead of appending a
-        // duplicate; drop stale error banners while we're at it.
-        const lastUser = [...messagesRef.current].reverse().find((m) => m.role === 'user');
-        if (!lastUser) {
+        // duplicate. Everything after it — error banners and truncated
+        // partial replies — is dropped so the outgoing history ends with the
+        // user's question, not a half-finished assistant fragment.
+        const msgs = messagesRef.current;
+        const lastUserIdx = msgs.map((m) => m.role).lastIndexOf('user');
+        if (lastUserIdx === -1) {
           disarmTimeout();
           isNetworkBusyRef.current = false;
           return;
         }
-        userMessage = lastUser;
-        setMessages((prev) => prev.filter((m) => m.role !== 'system'));
+        userMessage = msgs[lastUserIdx];
+        setMessages((prev) => {
+          const idx = prev.map((m) => m.id).lastIndexOf(userMessage.id);
+          return idx === -1 ? prev : prev.slice(0, idx + 1);
+        });
       } else {
         recordSignal(userText);
 
@@ -387,7 +399,7 @@ export function useAssistant() {
         let streamErrorMessage: string | null = null;
         const receivedToolCalls: ToolCall[] = [];
 
-        await readChatStream(res.body, {
+        const streamResult = await readChatStream(res.body, {
           onEvent: () => {
             receivedAnyEvent = true;
             armTimeout(); // progress resets the idle deadline
@@ -397,6 +409,9 @@ export function useAssistant() {
             if (meta.degraded !== undefined) {
               setIsDegraded(meta.degraded);
               setDegradedReason(meta.degraded ? meta.reason ?? null : null);
+            }
+            if (meta.notice) {
+              addSessionEvent('Provider notice', meta.notice, 'warn');
             }
           },
           onDelta: (text) => {
@@ -479,22 +494,41 @@ export function useAssistant() {
         if (requestGenerationRef.current !== generation) return;
 
         const finalText = fullText || "I'm not sure how to respond to that. Could you try rephrasing?";
+        // A stream that ended without `done` (or hit a provider cutoff) is
+        // truncated: keep the partial text, flag it, and never speak it as if
+        // it were a complete answer.
+        const wasTruncated =
+          !streamResult.done ||
+          streamResult.finishReason === 'MAX_TOKENS' ||
+          streamResult.finishReason === 'SAFETY';
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMessageId
-              ? { ...m, content: finalText, isStreaming: false }
+              ? {
+                  ...m,
+                  content: finalText,
+                  isStreaming: false,
+                  truncated: wasTruncated || undefined,
+                }
               : m
           )
         );
 
-        if (image) {
+        if (wasTruncated) {
+          const why = !streamResult.done
+            ? 'STREAM ENDED EARLY'
+            : `FINISH REASON: ${streamResult.finishReason}`;
+          addSessionEvent('Response truncated', why, 'warn');
+        }
+
+        if (userMessage.image) {
           setUploadedImage(null);
         }
 
         isNetworkBusyRef.current = false;
 
         // Voice playback if autoSpeak is enabled and TTS is supported
-        if (autoSpeak && ttsSupported && finalText) {
+        if (autoSpeak && ttsSupported && finalText && !wasTruncated) {
           setStatus('speaking');
           addSessionEvent('Voice response active', 'SYNTHESIS ENGINE ENGAGED', 'normal');
           speak(finalText, () => {
@@ -510,11 +544,17 @@ export function useAssistant() {
 
         // Close out a partial streaming shell so a cancelled stream doesn't
         // leave a message stuck in streaming state (drop it if still empty).
+        // Surviving partial text is marked truncated: it must render as
+        // interrupted and never re-enter the outgoing history.
         if (assistantMessageId) {
           const shellId = assistantMessageId;
           setMessages((prev) =>
             prev
-              .map((m) => (m.id === shellId ? { ...m, isStreaming: false } : m))
+              .map((m) =>
+                m.id === shellId && m.content.length > 0
+                  ? { ...m, isStreaming: false, truncated: true }
+                  : m
+              )
               .filter((m) => m.id !== shellId || m.content.length > 0)
           );
         }

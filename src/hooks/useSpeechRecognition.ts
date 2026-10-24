@@ -95,7 +95,11 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
   );
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-  const isStoppingRef = useRef(false);
+  // Number of results already folded into the final transcript this session.
+  // The results list is cumulative and finalized results are immutable, so a
+  // monotonic cursor both dedupes and captures finals the engine has moved
+  // past event.resultIndex (slicing from resultIndex drops earlier finals).
+  const finalizedCountRef = useRef(0);
 
   // Audio analyzer refs
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -198,13 +202,18 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
       let interim = '';
       let final = '';
 
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        const item = event.results[i];
-        if (item.isFinal) {
-          final += item[0].transcript;
-        } else {
-          interim += item[0].transcript;
-        }
+      const results = event.results;
+      // Consume newly finalized segments in order; stop at the first interim
+      // (it may still change, and anything behind it isn't final yet either).
+      while (
+        finalizedCountRef.current < results.length &&
+        results[finalizedCountRef.current].isFinal
+      ) {
+        final += results[finalizedCountRef.current][0].transcript;
+        finalizedCountRef.current++;
+      }
+      for (let i = finalizedCountRef.current; i < results.length; ++i) {
+        interim += results[i][0].transcript;
       }
 
       if (interim) {
@@ -213,7 +222,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
 
       if (final) {
         setInterimTranscript('');
-        setTranscript(final.trim());
+        setTranscript((prev) => `${prev} ${final}`.trim());
       }
     };
 
@@ -268,7 +277,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     setError(null);
     setTranscript('');
     setInterimTranscript('');
-    isStoppingRef.current = false;
+    finalizedCountRef.current = 0;
 
     try {
       recognitionRef.current.start();
@@ -281,7 +290,6 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
 
   const stopListening = useCallback(() => {
     if (!recognitionRef.current) return;
-    isStoppingRef.current = true;
 
     try {
       recognitionRef.current.stop();

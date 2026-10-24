@@ -13,6 +13,7 @@ import {
   Volume2,
   RotateCcw,
   ArrowDown,
+  AlertTriangle,
 } from 'lucide-react';
 import MarkdownMessage from './MarkdownMessage';
 import type { Message } from '@/types/types';
@@ -302,7 +303,7 @@ function ChatLog({
                     </div>
                   </div>
 
-                  <div className="text-soft text-[13px]">
+                  <div className={`text-soft text-[13px] ${message.truncated ? 'opacity-60' : ''}`}>
                     <MarkdownMessage content={message.content} />
                     {message.isStreaming && (
                       <span
@@ -311,6 +312,22 @@ function ChatLog({
                       />
                     )}
                   </div>
+
+                  {message.truncated && (
+                    <div className="mt-1.5 flex items-center gap-2 text-[11px] font-mono text-warning">
+                      <AlertTriangle className="w-3 h-3" aria-hidden="true" />
+                      <span>Response interrupted — partial reply</span>
+                      {onRetry && (
+                        <button
+                          onClick={onRetry}
+                          className="flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-soft transition-colors cursor-pointer"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span>Retry</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </motion.div>
             );

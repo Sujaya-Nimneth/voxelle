@@ -15,6 +15,14 @@ const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const MAX_REQUESTS_PER_WINDOW = 30; // 30 requests per minute
 
+// One-shot warnings: logging on every request just floods serverless logs.
+const warnedOnce = new Set<string>();
+function warnOnce(key: string, message: string) {
+  if (warnedOnce.has(key)) return;
+  warnedOnce.add(key);
+  console.warn(message);
+}
+
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
   const client = rateLimitMap.get(ip);
@@ -118,29 +126,42 @@ export async function POST(request: NextRequest) {
       validatedImage = image;
     }
 
-    // 3. Dispatch to provider — every path streams NDJSON events
+    // 3. Dispatch to provider — every path streams NDJSON events. The request
+    // signal is threaded through so a client disconnect also cancels the
+    // upstream provider call instead of streaming it into the void.
     switch (AI_PROVIDER) {
       case 'gemini':
         if (!GEMINI_API_KEY) {
-          console.warn('GEMINI_API_KEY is not configured. Falling back to mock engine.');
+          warnOnce('gemini-key', 'GEMINI_API_KEY is not configured. Falling back to mock engine.');
           return streamNdjson(
-            streamMock(sanitizedMessages, true, 'Gemini API key not configured')
+            streamMock(sanitizedMessages, true, 'Gemini API key not configured'),
+            request.signal
           );
         }
-        return streamNdjson(streamGemini(sanitizedMessages, validatedImage));
+        return streamNdjson(
+          streamGemini(sanitizedMessages, validatedImage, request.signal),
+          request.signal
+        );
 
-      case 'groq':
+      case 'groq': {
         if (!GROQ_API_KEY) {
-          console.warn('GROQ_API_KEY is not configured. Falling back to mock engine.');
+          warnOnce('groq-key', 'GROQ_API_KEY is not configured. Falling back to mock engine.');
           return streamNdjson(
-            streamMock(sanitizedMessages, true, 'Groq API key not configured')
+            streamMock(sanitizedMessages, true, 'Groq API key not configured'),
+            request.signal
           );
         }
-        return streamNdjson(streamGroq(sanitizedMessages));
+        return streamNdjson(
+          streamGroq(sanitizedMessages, request.signal, {
+            droppedImage: validatedImage !== undefined,
+          }),
+          request.signal
+        );
+      }
 
       case 'mock':
       default:
-        return streamNdjson(streamMock(sanitizedMessages, false));
+        return streamNdjson(streamMock(sanitizedMessages, false), request.signal);
     }
   } catch (error) {
     console.error('Chat API unexpected error:', error);
@@ -157,7 +178,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function streamNdjson(events: AsyncGenerator<ChatStreamEvent>): Response {
+function streamNdjson(events: AsyncGenerator<ChatStreamEvent>, requestSignal?: AbortSignal): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -166,7 +187,9 @@ function streamNdjson(events: AsyncGenerator<ChatStreamEvent>): Response {
           controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
         }
       } catch (err) {
-        console.error('Chat stream crashed:', err);
+        if (!requestSignal?.aborted) {
+          console.error('Chat stream crashed:', err);
+        }
         try {
           controller.enqueue(
             encoder.encode(
@@ -183,6 +206,12 @@ function streamNdjson(events: AsyncGenerator<ChatStreamEvent>): Response {
           // Already closed
         }
       }
+    },
+    // Client disconnected — stop pulling from the provider upstream. The
+    // generator is queued a return, which runs its cleanup once the current
+    // await settles (the aborted fetch makes that immediate).
+    cancel() {
+      void events.return(undefined);
     },
   });
 
@@ -264,11 +293,13 @@ async function* streamMock(
 
 async function* streamGemini(
   messages: Message[],
-  image?: string
+  image: string | undefined,
+  requestSignal: AbortSignal
 ): AsyncGenerator<ChatStreamEvent> {
   try {
     // Image-only turns have empty text; don't emit empty text parts.
-    const geminiMessages = messages.map((m) => ({
+    type GeminiPart = { text: string } | { inline_data: { mime_type: string; data: string } };
+    const geminiMessages: Array<{ role: string; parts: GeminiPart[] }> = messages.map((m) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: m.content ? [{ text: m.content }] : [],
     }));
@@ -284,7 +315,7 @@ async function* streamGemini(
               mime_type: match[1],
               data: match[2],
             },
-          } as never);
+          });
         }
       }
     }
@@ -325,9 +356,10 @@ Keep your responses natural, conversational, and direct since they may be spoken
           'x-goog-api-key': GEMINI_API_KEY,
         },
         body: JSON.stringify(geminiBody),
-        // Don't let the serverless function burn until the platform timeout
-        // if the provider hangs; the client gives up long before this.
-        signal: AbortSignal.timeout(30_000),
+        // Combine the client's disconnect signal with the hang deadline so a
+        // hung provider can't burn the function to the platform timeout —
+        // and a departed client stops paying for tokens.
+        signal: AbortSignal.any([requestSignal, AbortSignal.timeout(30_000)]),
       }
     );
 
@@ -341,11 +373,13 @@ Keep your responses natural, conversational, and direct since they may be spoken
     yield { type: 'meta', provider: 'gemini', degraded: false };
 
     let hasText = false;
+    let finishReason: string | undefined;
     const toolCalls: ToolCall[] = [];
 
     for await (const payload of parseSse(res.body)) {
       let chunk: {
         candidates?: Array<{
+          finishReason?: string;
           content?: { parts?: Array<{ text?: string; functionCall?: { name: string; args?: unknown } }> };
         }>;
       };
@@ -355,7 +389,12 @@ Keep your responses natural, conversational, and direct since they may be spoken
         continue;
       }
 
-      const parts = chunk.candidates?.[0]?.content?.parts;
+      const candidate = chunk.candidates?.[0];
+      if (candidate?.finishReason) {
+        finishReason = candidate.finishReason;
+      }
+
+      const parts = candidate?.content?.parts;
       if (!Array.isArray(parts)) continue;
 
       for (const part of parts) {
@@ -381,8 +420,9 @@ Keep your responses natural, conversational, and direct since they may be spoken
       yield { type: 'delta', text: toolCalls.map(formatToolNarrative).join(' ') };
     }
 
-    yield { type: 'done' };
+    yield { type: 'done', finishReason };
   } catch (err) {
+    if (requestSignal.aborted) return; // client left; nothing to report
     console.error('Gemini stream exception:', err);
     yield {
       type: 'error',
@@ -394,7 +434,11 @@ Keep your responses natural, conversational, and direct since they may be spoken
 
 // ─── Groq Handler (OpenAI-compatible SSE streaming) ───
 
-async function* streamGroq(messages: Message[]): AsyncGenerator<ChatStreamEvent> {
+async function* streamGroq(
+  messages: Message[],
+  requestSignal: AbortSignal,
+  options?: { droppedImage?: boolean }
+): AsyncGenerator<ChatStreamEvent> {
   try {
     const groqMessages = [
       {
@@ -424,7 +468,7 @@ async function* streamGroq(messages: Message[]): AsyncGenerator<ChatStreamEvent>
         'Content-Type': 'application/json',
         Authorization: `Bearer ${GROQ_API_KEY}`,
       },
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.any([requestSignal, AbortSignal.timeout(30_000)]),
       body: JSON.stringify({
         model: GROQ_MODEL,
         messages: groqMessages,
@@ -443,9 +487,17 @@ async function* streamGroq(messages: Message[]): AsyncGenerator<ChatStreamEvent>
       return;
     }
 
-    yield { type: 'meta', provider: 'groq', degraded: false };
+    yield {
+      type: 'meta',
+      provider: 'groq',
+      degraded: false,
+      notice: options?.droppedImage
+        ? 'This text-only provider cannot see the attached image; it was not sent.'
+        : undefined,
+    };
 
     let hasText = false;
+    let finishReason: string | undefined;
     // Groq fragments tool calls across chunks; aggregate by index until done.
     const toolAccumulators = new Map<
       number,
@@ -457,6 +509,7 @@ async function* streamGroq(messages: Message[]): AsyncGenerator<ChatStreamEvent>
 
       let chunk: {
         choices?: Array<{
+          finish_reason?: string | null;
           delta?: {
             content?: string;
             tool_calls?: Array<{
@@ -473,7 +526,18 @@ async function* streamGroq(messages: Message[]): AsyncGenerator<ChatStreamEvent>
         continue;
       }
 
-      const delta = chunk.choices?.[0]?.delta;
+      const choice = chunk.choices?.[0];
+      if (choice?.finish_reason) {
+        // Normalize to the Gemini vocabulary the client already understands.
+        finishReason =
+          choice.finish_reason === 'length'
+            ? 'MAX_TOKENS'
+            : choice.finish_reason === 'tool_calls'
+              ? 'TOOL_CALLS'
+              : 'STOP';
+      }
+
+      const delta = choice?.delta;
       if (!delta) continue;
 
       if (typeof delta.content === 'string' && delta.content) {
@@ -516,8 +580,9 @@ async function* streamGroq(messages: Message[]): AsyncGenerator<ChatStreamEvent>
       yield { type: 'delta', text: toolCalls.map(formatToolNarrative).join(' ') };
     }
 
-    yield { type: 'done' };
+    yield { type: 'done', finishReason };
   } catch (err) {
+    if (requestSignal.aborted) return; // client left; nothing to report
     console.error('Groq stream exception:', err);
     yield {
       type: 'error',

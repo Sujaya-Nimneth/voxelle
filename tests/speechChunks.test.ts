@@ -42,4 +42,14 @@ describe('chunkTextForSpeech', () => {
     assert.strictEqual(chunks.length, 3);
     assert.strictEqual(chunks.join(''), text);
   });
+
+  test('a separator landing at the very end of the window never exceeds the cap', () => {
+    // 199 chars, a period, then a space at index 200 — the old window logic
+    // produced a 201-char chunk here.
+    const text = 'a'.repeat(199) + '. ' + 'b'.repeat(50);
+    const chunks = chunkTextForSpeech(text);
+    for (const chunk of chunks) {
+      assert.ok(chunk.length <= 200, `chunk too long: ${chunk.length}`);
+    }
+  });
 });

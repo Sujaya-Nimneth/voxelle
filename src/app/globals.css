@@ -16,6 +16,7 @@
   --violet-soft: #d3c8ff;
   --lime: #b5f56f;
   --danger: #ff7594;
+  --warning: #ffc561;
 }
 
 @theme inline {
@@ -32,6 +33,7 @@
   --color-violet-soft: var(--violet-soft);
   --color-lime: var(--lime);
   --color-danger: var(--danger);
+  --color-warning: var(--warning);
   --font-sans: var(--font-manrope), system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: var(--font-dm-mono), ui-monospace, SFMono-Regular, monospace;
 }

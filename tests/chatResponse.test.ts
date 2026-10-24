@@ -8,7 +8,7 @@ function msg(partial: Partial<Message> & Pick<Message, 'id' | 'role'>): Message 
 }
 
 describe('buildHistoryForApi', () => {
-  test('appends the new user message and keeps only its image', () => {
+  test('strips every embedded image — the request-level image field is the only channel', () => {
     const history: Message[] = [
       msg({ id: '1', role: 'user', image: 'data:image/png;base64,OLD' }),
       msg({ id: '2', role: 'assistant' }),
@@ -18,8 +18,8 @@ describe('buildHistoryForApi', () => {
     const result = buildHistoryForApi(history, appended);
 
     assert.strictEqual(result.length, 3);
-    assert.strictEqual(result[0].image, undefined); // old image stripped
-    assert.strictEqual(result[2].image, 'data:image/png;base64,NEW'); // newest kept
+    // Embedded base64 blobs are dead weight server-side; none should ship.
+    assert.ok(result.every((m) => m.image === undefined));
   });
 
   test('excludes system error banners from the outgoing history', () => {
@@ -44,6 +44,18 @@ describe('buildHistoryForApi', () => {
 
     assert.strictEqual(result.length, 1);
     assert.strictEqual(result[0].content, 'please retry me');
+  });
+
+  test('truncated partial replies never enter the outgoing history', () => {
+    const history: Message[] = [
+      msg({ id: '1', role: 'user', content: 'tell me a story' }),
+      msg({ id: '2', role: 'assistant', content: 'Once upon a', truncated: true }),
+    ];
+
+    const result = buildHistoryForApi(history, msg({ id: '3', role: 'user', content: 'again' }));
+
+    assert.strictEqual(result.length, 2);
+    assert.ok(result.every((m) => m.id !== '2'));
   });
 
   test('caps the outgoing window at the last 10 messages', () => {

@@ -186,7 +186,7 @@ function ActivityRail({
                   <span
                     className={`absolute -left-[4px] top-[14px] w-[7px] h-[7px] rounded-full ${
                       isWarn
-                        ? 'bg-[#ffc561] shadow-[0_0_9px_#ffc561]'
+                        ? 'bg-warning shadow-[0_0_9px_var(--warning)]'
                         : isSuccess
                         ? 'bg-lime shadow-[0_0_9px_var(--lime)]'
                         : 'bg-cyan shadow-[0_0_9px_var(--cyan)]'
