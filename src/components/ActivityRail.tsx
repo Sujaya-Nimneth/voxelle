@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, memo } from 'react';
+import { useEffect, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Calendar, Home, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { X, Calendar, Home, CheckCircle2, ShieldCheck, Download, AlertTriangle } from 'lucide-react';
 import AudioMeter from './AudioMeter';
 import type { AssistantStatus, SessionEvent, ToolEvent } from '@/types/types';
 
@@ -65,6 +65,18 @@ function ActivityRail({
         return 'var(--cyan)';
     }
   };
+
+  const handleDownloadIcs = useCallback((toolEvent: ToolEvent) => {
+    if (!toolEvent.ics) return;
+    const blob = new Blob([toolEvent.ics], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    // .ics downloads import cleanly into Google/Apple/Outlook calendars.
+    anchor.download = 'voxelle-event.ics';
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }, []);
 
   const railContent = (
     <aside className="w-[316px] flex-shrink-0 flex flex-col justify-between h-full p-5 lg:py-7 lg:px-5 border-l border-line bg-[rgba(12,17,30,0.88)] backdrop-blur-2xl z-40 overflow-y-auto">
@@ -149,17 +161,38 @@ function ActivityRail({
                       <span className="w-2 h-2 rounded-full bg-cyan animate-ping" />
                     )}
                   </div>
-                  <p className="text-[11px] text-soft mt-1.5 font-mono flex items-center gap-1">
+                  <p className="text-[11px] text-soft mt-1.5 font-mono flex items-start gap-1">
                     {te.toolCall.status === 'completed' && (
-                      <CheckCircle2 className="w-3 h-3 text-lime flex-shrink-0" />
+                      <CheckCircle2
+                        className={`w-3 h-3 flex-shrink-0 mt-[3px] ${te.simulated ? 'text-warning' : 'text-lime'}`}
+                      />
                     )}
                     <span>
                       {te.result ||
                         (te.toolCall.status === 'executing'
-                          ? 'Applying environmental change...'
+                          ? 'Executing on the server…'
                           : 'Action completed')}
                     </span>
                   </p>
+
+                  {/* Real artifact: downloadable calendar file */}
+                  {te.ics && te.toolCall.status === 'completed' && (
+                    <button
+                      onClick={() => handleDownloadIcs(te)}
+                      className="mt-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-cyan bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 transition-colors cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Add to calendar (.ics)</span>
+                    </button>
+                  )}
+
+                  {/* Honest label when no real side effect exists */}
+                  {te.simulated && te.toolCall.status === 'completed' && (
+                    <div className="mt-1.5 flex items-center gap-1 text-[10px] font-mono text-warning">
+                      <AlertTriangle className="w-3 h-3" aria-hidden="true" />
+                      <span>SIMULATED — NO DEVICE CONNECTED</span>
+                    </div>
+                  )}
                 </div>
               ))}
             </motion.div>
@@ -207,8 +240,9 @@ function ActivityRail({
       <div className="mt-6 p-3 rounded-[10px] bg-[rgba(73,68,145,0.13)] border border-[rgba(146,108,255,0.18)] text-[10px] text-dim leading-relaxed flex items-start gap-2">
         <ShieldCheck className="w-4 h-4 text-violet flex-shrink-0 mt-0.5" />
         <div>
-          <b className="text-violet-soft font-semibold block mb-0.5">Private by design.</b>
-          Voice is processed only while you&apos;re actively speaking.
+          <b className="text-violet-soft font-semibold block mb-0.5">What leaves this page.</b>
+          Only your text messages (and attached images) go to the configured AI
+          provider. The audio meter runs entirely in your browser.
         </div>
       </div>
     </aside>

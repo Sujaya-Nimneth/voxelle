@@ -25,6 +25,10 @@ export interface ToolEvent {
   id: string;
   toolCall: ToolCall;
   result?: string;
+  /** Raw iCalendar payload when the tool produced a downloadable artifact. */
+  ics?: string;
+  /** True when execution had no real side effect (displayed honestly). */
+  simulated?: boolean;
   timestamp: number;
 }
 
@@ -53,5 +57,14 @@ export type ChatStreamEvent =
     }
   | { type: 'delta'; text: string }
   | { type: 'tool'; toolCall: ToolCall }
+  | {
+      /** Outcome of server-side execution of a previously announced tool call. */
+      type: 'tool_result';
+      toolCallId: string;
+      ok: boolean;
+      message: string;
+      ics?: string;
+      simulated: boolean;
+    }
   | { type: 'error'; message: string }
   | { type: 'done'; finishReason?: string };

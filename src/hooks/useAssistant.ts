@@ -6,11 +6,10 @@ import { useSpeechSynthesis } from './useSpeechSynthesis';
 import { optimizeImage } from '@/lib/imageUtils';
 import { buildHistoryForApi } from '@/lib/chatResponse';
 import { readChatStream } from '@/lib/chatStream';
-import { toolDefinitions, formatToolResult } from '@/app/api/chat/tools';
+import { toolDefinitions } from '@/app/api/chat/tools';
 import type {
   AssistantStatus,
   Message,
-  ToolCall,
   ToolEvent,
   SessionEvent,
 } from '@/types/types';
@@ -397,7 +396,7 @@ export function useAssistant() {
         let lastRenderAt = 0;
         let receivedAnyEvent = false;
         let streamErrorMessage: string | null = null;
-        const receivedToolCalls: ToolCall[] = [];
+        const toolNameById = new Map<string, string>();
 
         const streamResult = await readChatStream(res.body, {
           onEvent: () => {
@@ -426,7 +425,41 @@ export function useAssistant() {
             }
           },
           onTool: (tc) => {
-            receivedToolCalls.push(tc);
+            // The server announces a call as it begins executing it there;
+            // the card completes when the tool_result event arrives.
+            toolNameById.set(tc.id, tc.name);
+            const toolEvent: ToolEvent = {
+              id: generateId(),
+              toolCall: tc,
+              timestamp: Date.now(),
+            };
+            setToolEvents((prev) => [...prev, toolEvent]);
+            addSessionEvent(
+              `Tool executing: ${tc.name.replace(/_/g, ' ')}`,
+              'EXECUTED SERVER-SIDE',
+              'warn'
+            );
+          },
+          onToolResult: (result) => {
+            const name = toolNameById.get(result.toolCallId) ?? 'tool';
+            setToolEvents((prev) =>
+              prev.map((te) =>
+                te.toolCall.id === result.toolCallId
+                  ? {
+                      ...te,
+                      toolCall: { ...te.toolCall, status: 'completed' as const },
+                      result: result.message,
+                      ics: result.ics,
+                      simulated: result.simulated,
+                    }
+                  : te
+              )
+            );
+            addSessionEvent(
+              `Tool ${result.ok ? 'completed' : 'rejected'}: ${name.replace(/_/g, ' ')}`,
+              result.ok ? 'RESULT SENT BACK TO MODEL' : 'UNKNOWN TOOL NAME',
+              result.ok ? 'success' : 'warn'
+            );
           },
           onError: (message) => {
             streamErrorMessage = message;
@@ -445,53 +478,6 @@ export function useAssistant() {
           setMessages((prev) => prev.filter((m) => m.id !== assistantMessageId));
           throw new Error(streamErrorMessage);
         }
-
-        // Tool execution animations — cancellable: a newer request or
-        // clearHistory during the staggered delays stops the sequence.
-        if (receivedToolCalls.length > 0) {
-          for (const tc of receivedToolCalls) {
-            if (requestGenerationRef.current !== generation) return;
-
-            const toolEvent: ToolEvent = {
-              id: generateId(),
-              toolCall: { ...tc, status: 'executing' },
-              timestamp: Date.now(),
-            };
-            setToolEvents((prev) => [...prev, toolEvent]);
-
-            addSessionEvent(
-              `Tool executing: ${tc.name.replace(/_/g, ' ')}`,
-              'DISPATCHED TO ENVIRONMENT',
-              'warn'
-            );
-
-            // Realistic micro-delay for visual feedback
-            await new Promise((resolve) => setTimeout(resolve, 800));
-
-            if (requestGenerationRef.current !== generation) return;
-
-            setToolEvents((prev) =>
-              prev.map((te) =>
-                te.id === toolEvent.id
-                  ? {
-                      ...te,
-                      toolCall: { ...te.toolCall, status: 'completed' as const },
-                      result: formatToolResult(tc),
-                    }
-                  : te
-              )
-            );
-
-            addSessionEvent(
-              `Tool completed: ${tc.name.replace(/_/g, ' ')}`,
-              'SUCCESS · STATE APPLIED',
-              'success'
-            );
-          }
-        }
-
-        // Finalize the reply — only if this request still owns the conversation
-        if (requestGenerationRef.current !== generation) return;
 
         const finalText = fullText || "I'm not sure how to respond to that. Could you try rephrasing?";
         // A stream that ended without `done` (or hit a provider cutoff) is

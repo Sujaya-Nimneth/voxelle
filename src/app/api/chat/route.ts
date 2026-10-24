@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMockResponse, toolDefinitions, formatToolNarrative } from './tools';
 import { sanitizeMessages } from './messageSanitizer';
-import type { Message, ToolCall, ToolCallArgs, ChatStreamEvent } from '@/types/types';
+import { executeToolCall, type ToolExecutionResult } from '@/lib/toolExecutors';
+import type { Message, ToolCall, ChatStreamEvent } from '@/types/types';
 
 // ─── Configuration ───
 const AI_PROVIDER = (process.env.AI_PROVIDER || 'mock').toLowerCase();
@@ -21,32 +22,6 @@ function warnOnce(key: string, message: string) {
   if (warnedOnce.has(key)) return;
   warnedOnce.add(key);
   console.warn(message);
-}
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const client = rateLimitMap.get(ip);
-
-  // Periodically clean up stale records to prevent memory leak
-  if (rateLimitMap.size > 2000) {
-    for (const [key, record] of rateLimitMap.entries()) {
-      if (now > record.resetTime) {
-        rateLimitMap.delete(key);
-      }
-    }
-  }
-
-  if (!client || now > client.resetTime) {
-    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-
-  if (client.count >= MAX_REQUESTS_PER_WINDOW) {
-    return false;
-  }
-
-  client.count += 1;
-  return true;
 }
 
 // ─── Input Validation ───
@@ -92,10 +67,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Sanitize and filter messages: retain only user and assistant messages,
-    // capped at last 20; an empty-content final user turn survives when an
+    // capped at the window; an empty-content final user turn survives when an
     // image is attached (image-only send).
     const sanitizedMessages: Message[] = sanitizeMessages(
-      messages as Message[],
+      messages,
       typeof image === 'string' && image.length > 0
     );
 
@@ -170,6 +145,32 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const client = rateLimitMap.get(ip);
+
+  // Periodically clean up stale records to prevent memory leak
+  if (rateLimitMap.size > 2000) {
+    for (const [key, record] of rateLimitMap.entries()) {
+      if (now > record.resetTime) {
+        rateLimitMap.delete(key);
+      }
+    }
+  }
+
+  if (!client || now > client.resetTime) {
+    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+
+  if (client.count >= MAX_REQUESTS_PER_WINDOW) {
+    return false;
+  }
+
+  client.count += 1;
+  return true;
 }
 
 // ─── NDJSON stream plumbing ───
@@ -250,6 +251,36 @@ async function* parseSse(body: ReadableStream<Uint8Array>): AsyncGenerator<strin
   }
 }
 
+// ─── Tool execution (server-side, shared by every provider path) ───
+
+interface ExecutedTool {
+  call: ToolCall;
+  result: ToolExecutionResult;
+}
+
+// Emits the announce/execute/report event trio for each tool call. Execution
+// happens on the server so results are real (or honestly simulated) and the
+// model can be told what actually happened. Populates `executedOut` as it
+// runs so callers can feed the same outcomes into the round-trip.
+async function* emitToolExecution(
+  toolCalls: ToolCall[],
+  executedOut: ExecutedTool[]
+): AsyncGenerator<ChatStreamEvent> {
+  for (const call of toolCalls) {
+    yield { type: 'tool', toolCall: { ...call, status: 'executing' } };
+    const result = executeToolCall(call);
+    executedOut.push({ call, result });
+    yield {
+      type: 'tool_result',
+      toolCallId: call.id,
+      ok: result.ok,
+      message: result.message,
+      ics: result.ics,
+      simulated: result.simulated,
+    };
+  }
+}
+
 // ─── Mock Handler (demo mode / degraded fallback) ───
 
 async function* streamMock(
@@ -262,16 +293,17 @@ async function* streamMock(
   const result = lastUserMessage
     ? getMockResponse(lastUserMessage.content)
     : {
-        response:
-          "Hello! I'm Voxelle, your ambient voice AI co-pilot. How can I help you?",
+        response: "Hello! I'm Voxelle, your ambient voice AI co-pilot. How can I help you?",
         toolCalls: undefined,
       };
 
   yield { type: 'meta', provider: 'mock', degraded, reason: degradedReason };
 
   if (result.toolCalls) {
-    for (const tc of result.toolCalls) {
-      yield { type: 'tool', toolCall: tc };
+    // Demo mode runs the same server-side executors as live providers — the
+    // .ics download in the demo is the real artifact.
+    for await (const event of emitToolExecution(result.toolCalls, [])) {
+      yield event;
     }
   }
 
@@ -281,7 +313,7 @@ async function* streamMock(
     const isLastGroup = i + 3 >= words.length;
     yield {
       type: 'delta',
-      text: words.slice(i, i + 3).join(' ') + (isLastGroup ? '' : ' '),
+      text: words.slice(i, 3 + i).join(' ') + (isLastGroup ? '' : ' '),
     };
     await sleep(30);
   }
@@ -291,138 +323,208 @@ async function* streamMock(
 
 // ─── Gemini Handler (Google AI Studio, SSE streaming) ───
 
-async function* streamGemini(
-  messages: Message[],
-  image: string | undefined,
-  requestSignal: AbortSignal
-): AsyncGenerator<ChatStreamEvent> {
-  try {
-    // Image-only turns have empty text; don't emit empty text parts.
-    type GeminiPart = { text: string } | { inline_data: { mime_type: string; data: string } };
-    const geminiMessages: Array<{ role: string; parts: GeminiPart[] }> = messages.map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: m.content ? [{ text: m.content }] : [],
-    }));
+class ProviderHttpError extends Error {
+  constructor(
+    public provider: string,
+    public status: number
+  ) {
+    super(`${provider} HTTP ${status}`);
+  }
+}
 
-    // Attach image to the most recent user turn
-    if (image && geminiMessages.length > 0) {
-      const lastMsg = geminiMessages[geminiMessages.length - 1];
-      if (lastMsg.role === 'user') {
-        const match = image.match(/^data:([^;]+);base64,(.+)$/);
-        if (match) {
-          lastMsg.parts.push({
-            inline_data: {
-              mime_type: match[1],
-              data: match[2],
-            },
-          });
-        }
-      }
-    }
+type GeminiPart =
+  | { text: string }
+  | { inline_data: { mime_type: string; data: string } }
+  | { functionCall: GeminiFunctionCall }
+  | { functionResponse: { name: string; response: { result: string } } };
+type GeminiFunctionCall = { name: string; args?: unknown };
 
-    const geminiBody = {
-      contents: geminiMessages,
-      tools: [
-        {
-          function_declarations: toolDefinitions,
-        },
-      ],
-      system_instruction: {
-        parts: [
-          {
-            text: `You are Voxelle, a helpful voice-enabled multimodal AI assistant and ambient co-pilot. You can:
+// Normalized items from one Gemini streaming turn.
+interface GeminiTurnItem {
+  text?: string;
+  functionCall?: GeminiFunctionCall;
+  finishReason?: string;
+}
+
+const GEMINI_SYSTEM_INSTRUCTION = `You are Voxelle, a helpful voice-enabled multimodal AI assistant and ambient co-pilot. You can:
 1. Have natural, concise conversations suited for voice synthesis.
 2. Schedule calendar events using the add_calendar_event tool.
 3. Control smart home devices using the toggle_smart_home_device tool.
 4. Analyze images when provided.
 
-Keep your responses natural, conversational, and direct since they may be spoken aloud.`,
+Keep your responses natural, conversational, and direct since they may be spoken aloud.`;
+
+function toGeminiContents(messages: Message[], image?: string): Array<{ role: string; parts: GeminiPart[] }> {
+  const contents = messages.map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: m.content ? [{ text: m.content } as GeminiPart] : [],
+  }));
+
+  // Attach image to the most recent user turn
+  if (image && contents.length > 0) {
+    const lastMsg = contents[contents.length - 1];
+    if (lastMsg.role === 'user') {
+      const match = image.match(/^data:([^;]+);base64,(.+)$/);
+      if (match) {
+        lastMsg.parts.push({
+          inline_data: {
+            mime_type: match[1],
+            data: match[2],
           },
-        ],
-      },
-      generationConfig: {
-        temperature: 0.7,
-        topP: 0.95,
-        maxOutputTokens: 512,
-      },
-    };
-
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': GEMINI_API_KEY,
-        },
-        body: JSON.stringify(geminiBody),
-        // Combine the client's disconnect signal with the hang deadline so a
-        // hung provider can't burn the function to the platform timeout —
-        // and a departed client stops paying for tokens.
-        signal: AbortSignal.any([requestSignal, AbortSignal.timeout(30_000)]),
+        });
       }
-    );
-
-    if (!res.ok || !res.body) {
-      const errorText = await res.text().catch(() => '');
-      console.error('Gemini API call failed:', res.status, errorText);
-      yield* streamMock(messages, true, `Gemini error (HTTP ${res.status})`);
-      return;
     }
+  }
+  return contents;
+}
+
+// One streaming turn against Gemini. Throws ProviderHttpError before any
+// output when the request itself fails, so callers can fall back cleanly.
+async function* geminiTurn(
+  contents: Array<{ role: string; parts: GeminiPart[] }>,
+  signal: AbortSignal,
+  includeTools: boolean
+): AsyncGenerator<GeminiTurnItem> {
+  const geminiBody: Record<string, unknown> = {
+    contents,
+    system_instruction: { parts: [{ text: GEMINI_SYSTEM_INSTRUCTION }] },
+    generationConfig: { temperature: 0.7, topP: 0.95, maxOutputTokens: 512 },
+  };
+  if (includeTools) {
+    geminiBody.tools = [{ function_declarations: toolDefinitions }];
+  }
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': GEMINI_API_KEY,
+      },
+      body: JSON.stringify(geminiBody),
+      signal,
+    }
+  );
+
+  if (!res.ok || !res.body) {
+    const errorText = await res.text().catch(() => '');
+    console.error('Gemini API call failed:', res.status, errorText);
+    throw new ProviderHttpError('Gemini', res.status);
+  }
+
+  for await (const payload of parseSse(res.body)) {
+    let chunk: {
+      candidates?: Array<{
+        finishReason?: string;
+        content?: { parts?: Array<{ text?: string; functionCall?: GeminiFunctionCall }> };
+      }>;
+    };
+    try {
+      chunk = JSON.parse(payload);
+    } catch {
+      continue;
+    }
+
+    const candidate = chunk.candidates?.[0];
+    const item: GeminiTurnItem = {};
+    if (candidate?.finishReason) item.finishReason = candidate.finishReason;
+    const parts = candidate?.content?.parts;
+    if (Array.isArray(parts) && parts.length > 0) {
+      const part = parts[0];
+      if (typeof part.text === 'string' && part.text) item.text = part.text;
+      else if (part.functionCall) item.functionCall = part.functionCall;
+    }
+    if (item.text || item.functionCall || item.finishReason) yield item;
+  }
+}
+
+async function* streamGemini(
+  messages: Message[],
+  image: string | undefined,
+  requestSignal: AbortSignal
+): AsyncGenerator<ChatStreamEvent> {
+  // One budget across both the initial turn and the tool round-trip so a
+  // chatty agentic exchange can't double the function runtime.
+  const deadline = AbortSignal.timeout(30_000);
+  const signal = () => AbortSignal.any([requestSignal, deadline]);
+
+  try {
+    const contents = toGeminiContents(messages, image);
+    let finishReason: string | undefined;
+    let hasText = false;
+    const toolCalls: ToolCall[] = [];
+    // Echoed model turn for the round-trip: text and functionCall parts.
+    const modelParts: GeminiPart[] = [];
 
     yield { type: 'meta', provider: 'gemini', degraded: false };
 
-    let hasText = false;
-    let finishReason: string | undefined;
-    const toolCalls: ToolCall[] = [];
+    for await (const item of geminiTurn(contents, signal(), true)) {
+      if (item.finishReason) finishReason = item.finishReason;
+      if (item.text) {
+        hasText = true;
+        modelParts.push({ text: item.text });
+        yield { type: 'delta', text: item.text };
+      } else if (item.functionCall) {
+        modelParts.push({ functionCall: item.functionCall });
+        toolCalls.push({
+          id: `tool_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+          name: item.functionCall.name,
+          arguments: (item.functionCall.args || {}) as ToolCall['arguments'],
+          status: 'pending',
+        });
+      }
+    }
 
-    for await (const payload of parseSse(res.body)) {
-      let chunk: {
-        candidates?: Array<{
-          finishReason?: string;
-          content?: { parts?: Array<{ text?: string; functionCall?: { name: string; args?: unknown } }> };
-        }>;
-      };
+    if (toolCalls.length > 0) {
+      // Execute server-side and report real outcomes.
+      const executed: ExecutedTool[] = [];
+      for await (const event of emitToolExecution(toolCalls, executed)) {
+        yield event;
+      }
+
+      // Round-trip: hand the outcomes back so the model confirms with a
+      // grounded reply instead of the client inventing one. Tools are
+      // withheld on this turn — exactly one round-trip, bounded latency.
       try {
-        chunk = JSON.parse(payload);
-      } catch {
-        continue;
-      }
-
-      const candidate = chunk.candidates?.[0];
-      if (candidate?.finishReason) {
-        finishReason = candidate.finishReason;
-      }
-
-      const parts = candidate?.content?.parts;
-      if (!Array.isArray(parts)) continue;
-
-      for (const part of parts) {
-        if (typeof part.text === 'string' && part.text) {
-          hasText = true;
-          yield { type: 'delta', text: part.text };
-        } else if (part.functionCall) {
-          toolCalls.push({
-            id: `tool_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-            name: part.functionCall.name,
-            arguments: (part.functionCall.args || {}) as ToolCallArgs,
-            status: 'pending',
-          });
+        const roundTripContents = [
+          ...contents,
+          { role: 'model', parts: modelParts },
+          {
+            role: 'user',
+            parts: executed.map(({ call, result }) => ({
+              functionResponse: {
+                name: call.name,
+                response: { result: result.message },
+              },
+            })),
+          },
+        ];
+        for await (const item of geminiTurn(roundTripContents, signal(), false)) {
+          if (item.finishReason) finishReason = item.finishReason;
+          if (item.text) {
+            hasText = true;
+            yield { type: 'delta', text: item.text };
+          }
         }
+      } catch (err) {
+        if (requestSignal.aborted || deadline.aborted) return;
+        console.error('Gemini tool round-trip failed:', err);
+        // The tool DID run — fall through to the narrative below.
       }
-    }
 
-    for (const tc of toolCalls) {
-      yield { type: 'tool', toolCall: tc };
-    }
-
-    if (toolCalls.length > 0 && !hasText) {
-      yield { type: 'delta', text: toolCalls.map(formatToolNarrative).join(' ') };
+      if (!hasText) {
+        yield { type: 'delta', text: executed.map(({ call }) => formatToolNarrative(call)).join(' ') };
+      }
     }
 
     yield { type: 'done', finishReason };
   } catch (err) {
     if (requestSignal.aborted) return; // client left; nothing to report
+    if (err instanceof ProviderHttpError) {
+      yield* streamMock(messages, true, `Gemini error (HTTP ${err.status})`);
+      return;
+    }
     console.error('Gemini stream exception:', err);
     yield {
       type: 'error',
@@ -434,17 +536,116 @@ Keep your responses natural, conversational, and direct since they may be spoken
 
 // ─── Groq Handler (OpenAI-compatible SSE streaming) ───
 
+interface GroqTurnItem {
+  text?: string;
+  toolCallDelta?: { index: number; id?: string; name?: string; args?: string };
+  finishReason?: string;
+}
+
+const GROQ_SYSTEM_PROMPT =
+  'You are Voxelle, a helpful voice-enabled AI assistant and ambient co-pilot. Keep responses concise and conversational since they are spoken aloud.';
+
+async function* groqTurn(
+  messages: Array<Record<string, unknown>>,
+  signal: AbortSignal,
+  includeTools: boolean
+): AsyncGenerator<GroqTurnItem> {
+  const groqTools = toolDefinitions.map((td) => ({
+    type: 'function' as const,
+    function: {
+      name: td.name,
+      description: td.description,
+      parameters: td.parameters,
+    },
+  }));
+
+  const body: Record<string, unknown> = {
+    model: GROQ_MODEL,
+    messages,
+    temperature: 0.7,
+    max_tokens: 512,
+    stream: true,
+  };
+  if (includeTools) {
+    body.tools = groqTools;
+    body.tool_choice = 'auto';
+  }
+
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${GROQ_API_KEY}`,
+    },
+    signal,
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok || !res.body) {
+    const errorText = await res.text().catch(() => '');
+    console.error('Groq API call failed:', res.status, errorText);
+    throw new ProviderHttpError('Groq', res.status);
+  }
+
+  for await (const payload of parseSse(res.body)) {
+    if (payload === '[DONE]') break;
+
+    let chunk: {
+      choices?: Array<{
+        finish_reason?: string | null;
+        delta?: {
+          content?: string;
+          tool_calls?: Array<{
+            index: number;
+            id?: string;
+            function?: { name?: string; arguments?: string };
+          }>;
+        };
+      }>;
+    };
+    try {
+      chunk = JSON.parse(payload);
+    } catch {
+      continue;
+    }
+
+    const choice = chunk.choices?.[0];
+    const item: GroqTurnItem = {};
+    if (choice?.finish_reason) {
+      item.finishReason =
+        choice.finish_reason === 'length'
+          ? 'MAX_TOKENS'
+          : choice.finish_reason === 'tool_calls'
+            ? 'TOOL_CALLS'
+            : 'STOP';
+    }
+    if (choice?.delta?.content) item.text = choice.delta.content;
+    if (choice?.delta?.tool_calls?.length) {
+      // Only the first tool call per delta matters for our single-tool flows;
+      // fragments arrive split across chunks with a stable index.
+      const tc = choice.delta.tool_calls[0];
+      item.toolCallDelta = {
+        index: tc.index,
+        id: tc.id,
+        name: tc.function?.name,
+        args: tc.function?.arguments,
+      };
+    }
+    if (item.text || item.toolCallDelta || item.finishReason) yield item;
+  }
+}
+
 async function* streamGroq(
   messages: Message[],
   requestSignal: AbortSignal,
   options?: { droppedImage?: boolean }
 ): AsyncGenerator<ChatStreamEvent> {
+  const deadline = AbortSignal.timeout(30_000);
+  const signal = () => AbortSignal.any([requestSignal, deadline]);
+
   try {
-    const groqMessages = [
-      {
-        role: 'system',
-        content: `You are Voxelle, a helpful voice-enabled AI assistant and ambient co-pilot. Keep responses concise and conversational since they are spoken aloud.`,
-      },
+    const baseMessages: Array<Record<string, unknown>> = [
+      { role: 'system', content: GROQ_SYSTEM_PROMPT },
       ...messages.map((m) => ({
         role: m.role,
         // Groq's text models require non-empty content; image-only turns get a
@@ -452,40 +653,6 @@ async function* streamGroq(
         content: m.content || '[user attached an image]',
       })),
     ];
-
-    const groqTools = toolDefinitions.map((td) => ({
-      type: 'function' as const,
-      function: {
-        name: td.name,
-        description: td.description,
-        parameters: td.parameters,
-      },
-    }));
-
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${GROQ_API_KEY}`,
-      },
-      signal: AbortSignal.any([requestSignal, AbortSignal.timeout(30_000)]),
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: groqMessages,
-        tools: groqTools,
-        tool_choice: 'auto',
-        temperature: 0.7,
-        max_tokens: 512,
-        stream: true,
-      }),
-    });
-
-    if (!res.ok || !res.body) {
-      const errorText = await res.text().catch(() => '');
-      console.error('Groq API call failed:', res.status, errorText);
-      yield* streamMock(messages, true, `Groq error (HTTP ${res.status})`);
-      return;
-    }
 
     yield {
       type: 'meta',
@@ -497,92 +664,97 @@ async function* streamGroq(
     };
 
     let hasText = false;
+    let firstText = '';
     let finishReason: string | undefined;
     // Groq fragments tool calls across chunks; aggregate by index until done.
-    const toolAccumulators = new Map<
-      number,
-      { id?: string; name?: string; args: string }
-    >();
+    const toolAccumulators = new Map<number, { id?: string; name?: string; args: string }>();
 
-    for await (const payload of parseSse(res.body)) {
-      if (payload === '[DONE]') break;
-
-      let chunk: {
-        choices?: Array<{
-          finish_reason?: string | null;
-          delta?: {
-            content?: string;
-            tool_calls?: Array<{
-              index: number;
-              id?: string;
-              function?: { name?: string; arguments?: string };
-            }>;
-          };
-        }>;
-      };
-      try {
-        chunk = JSON.parse(payload);
-      } catch {
-        continue;
-      }
-
-      const choice = chunk.choices?.[0];
-      if (choice?.finish_reason) {
-        // Normalize to the Gemini vocabulary the client already understands.
-        finishReason =
-          choice.finish_reason === 'length'
-            ? 'MAX_TOKENS'
-            : choice.finish_reason === 'tool_calls'
-              ? 'TOOL_CALLS'
-              : 'STOP';
-      }
-
-      const delta = choice?.delta;
-      if (!delta) continue;
-
-      if (typeof delta.content === 'string' && delta.content) {
+    for await (const item of groqTurn(baseMessages, signal(), true)) {
+      if (item.finishReason) finishReason = item.finishReason;
+      if (item.text) {
         hasText = true;
-        yield { type: 'delta', text: delta.content };
+        firstText += item.text;
+        yield { type: 'delta', text: item.text };
       }
+      if (item.toolCallDelta) {
+        const d = item.toolCallDelta;
+        const acc = toolAccumulators.get(d.index) ?? { args: '' };
+        if (d.id) acc.id = d.id;
+        if (d.name) acc.name = d.name;
+        if (d.args) acc.args += d.args;
+        toolAccumulators.set(d.index, acc);
+      }
+    }
 
-      if (Array.isArray(delta.tool_calls)) {
-        for (const tc of delta.tool_calls) {
-          const acc = toolAccumulators.get(tc.index) ?? { args: '' };
-          if (tc.id) acc.id = tc.id;
-          if (tc.function?.name) acc.name = tc.function.name;
-          if (tc.function?.arguments) acc.args += tc.function.arguments;
-          toolAccumulators.set(tc.index, acc);
+    if (toolAccumulators.size > 0) {
+      const toolCalls: ToolCall[] = [];
+      for (const acc of toolAccumulators.values()) {
+        let parsedArgs: ToolCall['arguments'] = {};
+        try {
+          parsedArgs = JSON.parse(acc.args || '{}') as ToolCall['arguments'];
+        } catch {
+          parsedArgs = {};
         }
+        toolCalls.push({
+          id: acc.id || `tool_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+          name: acc.name || 'unknown_tool',
+          arguments: parsedArgs,
+          status: 'pending',
+        });
       }
-    }
 
-    const toolCalls: ToolCall[] = [];
-    for (const acc of toolAccumulators.values()) {
-      let parsedArgs: ToolCallArgs = {};
+      // Execute server-side and report real outcomes.
+      const executed: ExecutedTool[] = [];
+      for await (const event of emitToolExecution(toolCalls, executed)) {
+        yield event;
+      }
+
+      // Round-trip: echo the assistant's tool_calls, then reply with the
+      // execution outcomes so the confirmation is grounded. Tools are
+      // withheld on this turn — exactly one round-trip.
       try {
-        parsedArgs = JSON.parse(acc.args || '{}') as ToolCallArgs;
-      } catch {
-        parsedArgs = {};
+        const roundTripMessages: Array<Record<string, unknown>> = [
+          ...baseMessages,
+          {
+            role: 'assistant',
+            content: firstText || null,
+            tool_calls: toolCalls.map((tc) => ({
+              id: tc.id,
+              type: 'function',
+              function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
+            })),
+          },
+          ...executed.map(({ call, result }) => ({
+            role: 'tool',
+            tool_call_id: call.id,
+            content: result.message,
+          })),
+        ];
+        for await (const item of groqTurn(roundTripMessages, signal(), false)) {
+          if (item.finishReason) finishReason = item.finishReason;
+          if (item.text) {
+            hasText = true;
+            yield { type: 'delta', text: item.text };
+          }
+        }
+      } catch (err) {
+        if (requestSignal.aborted || deadline.aborted) return;
+        console.error('Groq tool round-trip failed:', err);
+        // The tool DID run — fall through to the narrative below.
       }
-      toolCalls.push({
-        id: acc.id || `tool_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-        name: acc.name || 'unknown_tool',
-        arguments: parsedArgs,
-        status: 'pending',
-      });
-    }
 
-    for (const tc of toolCalls) {
-      yield { type: 'tool', toolCall: tc };
-    }
-
-    if (toolCalls.length > 0 && !hasText) {
-      yield { type: 'delta', text: toolCalls.map(formatToolNarrative).join(' ') };
+      if (!hasText) {
+        yield { type: 'delta', text: executed.map(({ call }) => formatToolNarrative(call)).join(' ') };
+      }
     }
 
     yield { type: 'done', finishReason };
   } catch (err) {
     if (requestSignal.aborted) return; // client left; nothing to report
+    if (err instanceof ProviderHttpError) {
+      yield* streamMock(messages, true, `Groq error (HTTP ${err.status})`);
+      return;
+    }
     console.error('Groq stream exception:', err);
     yield {
       type: 'error',

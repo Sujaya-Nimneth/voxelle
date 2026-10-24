@@ -6,6 +6,13 @@ export interface ChatStreamHandlers {
   onMeta?: (meta: StreamMetaEvent) => void;
   onDelta?: (text: string) => void;
   onTool?: (toolCall: ToolCall) => void;
+  onToolResult?: (result: {
+    toolCallId: string;
+    ok: boolean;
+    message: string;
+    ics?: string;
+    simulated: boolean;
+  }) => void;
   onError?: (message: string) => void;
   onDone?: () => void;
   /** Fired for every received event — used to reset idle timeouts. */
@@ -73,6 +80,17 @@ export async function readChatStream(
           case 'tool':
             if (event.toolCall && typeof event.toolCall.name === 'string') {
               handlers.onTool?.(event.toolCall);
+            }
+            break;
+          case 'tool_result':
+            if (event.toolCallId) {
+              handlers.onToolResult?.({
+                toolCallId: event.toolCallId,
+                ok: event.ok,
+                message: event.message,
+                ics: event.ics,
+                simulated: event.simulated,
+              });
             }
             break;
           case 'error':
