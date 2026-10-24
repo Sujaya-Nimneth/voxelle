@@ -42,6 +42,14 @@ export const metadata: Metadata = {
     description:
       "A sleek, cyber dark ambient AI assistant and command center.",
     type: "website",
+    images: [{ url: "/og-image.png", width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Voxelle — Ambient Voice AI & Command Center",
+    description:
+      "Voice-first AI assistant with streaming responses and real tool execution.",
+    images: ["/og-image.png"],
   },
 };
 
