@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMockResponse, toolDefinitions, formatToolNarrative } from './tools';
+import { getMockResponse, toolDefinitions, formatToolNarrative } from '@/lib/tools';
 import { sanitizeMessages } from './messageSanitizer';
 import { executeToolCall, type ToolExecutionResult } from '@/lib/toolExecutors';
 import type { Message, ToolCall, ChatStreamEvent } from '@/types/types';
@@ -471,7 +471,7 @@ async function* streamGemini(
           id: `tool_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
           name: item.functionCall.name,
           arguments: (item.functionCall.args || {}) as ToolCall['arguments'],
-          status: 'pending',
+          status: 'executing',
         });
       }
     }
@@ -699,7 +699,7 @@ async function* streamGroq(
           id: acc.id || `tool_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
           name: acc.name || 'unknown_tool',
           arguments: parsedArgs,
-          status: 'pending',
+          status: 'executing',
         });
       }
 

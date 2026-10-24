@@ -11,14 +11,16 @@ export interface Message {
 }
 
 export interface ToolCallArgs {
-  [key: string]: string | number | boolean;
+  [key: string]: string | number | boolean | undefined;
 }
 
 export interface ToolCall {
   id: string;
   name: string;
   arguments: ToolCallArgs;
-  status: 'pending' | 'executing' | 'completed';
+  // Tool calls arrive already executing on the server; 'pending' was never
+  // observable by the client, so it doesn't exist in the protocol.
+  status: 'executing' | 'completed';
 }
 
 export interface ToolEvent {
@@ -38,11 +40,6 @@ export interface SessionEvent {
   subtitle: string;
   timestamp: number;
   status?: 'normal' | 'warn' | 'success';
-}
-
-export interface ChatRequest {
-  messages: Message[];
-  image?: string; // base64
 }
 
 // NDJSON stream events emitted by /api/chat, one JSON object per line.

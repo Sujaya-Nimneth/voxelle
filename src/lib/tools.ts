@@ -211,7 +211,7 @@ export function getMockResponse(userMessage: string): {
             {
               ...scenario.toolCall,
               id: `tool_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-              status: 'pending' as const,
+              status: 'executing' as const,
             },
           ]
         : undefined;

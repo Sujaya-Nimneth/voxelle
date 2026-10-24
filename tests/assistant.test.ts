@@ -5,7 +5,7 @@ import {
   toolDefinitions,
   formatToolResult,
   formatToolNarrative,
-} from '../src/app/api/chat/tools.ts';
+} from '../src/lib/tools.ts';
 
 describe('Voxelle Assistant Tools & Mock Engine', () => {
   test('toolDefinitions contains calendar and smart home specifications', () => {
@@ -106,7 +106,7 @@ describe('Voxelle Assistant Tools & Mock Engine', () => {
       id: 'test_5',
       name: 'toggle_smart_home_device',
       arguments: { state: 'off' },
-      status: 'pending',
+      status: 'executing',
     });
     assert.ok(narrative.startsWith("I've turned"));
     assert.ok(!narrative.includes('undefined'));

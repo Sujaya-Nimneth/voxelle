@@ -1,6 +1,11 @@
 import type { Message } from '@/types/types';
+// Same window the client sends (src/lib/chatResponse.ts) — the server still
+// re-truncates whatever a hand-rolled client submits, but the policy itself
+// is defined once. Explicit .ts extension keeps Node's test runner resolving
+// this runtime import without a bundler.
+import { MAX_HISTORY_FOR_API } from '../../../lib/chatResponse.ts';
 
-const MAX_MESSAGES_COUNT = 20;
+const MAX_MESSAGES_COUNT = MAX_HISTORY_FOR_API;
 const MAX_MESSAGE_CONTENT_LENGTH = 4000;
 
 // Normalizes client-supplied conversation history: only user/assistant turns,

@@ -19,7 +19,7 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import Modal from './Modal';
-import { toolDefinitions } from '@/app/api/chat/tools';
+import { toolDefinitions } from '@/lib/tools';
 import type { SpeechSettings } from '@/hooks/useSpeechSynthesis';
 
 interface SidebarProps {

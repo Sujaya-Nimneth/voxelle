@@ -5,7 +5,7 @@ import { parseTimeString, parseDateString, resolveEventStart, buildIcsCalendar }
 import type { ToolCall } from '../src/types/types.ts';
 
 function call(name: string, args: Record<string, string>): ToolCall {
-  return { id: 't1', name, arguments: args, status: 'pending' };
+  return { id: 't1', name, arguments: args, status: 'executing' };
 }
 
 describe('executeToolCall', () => {

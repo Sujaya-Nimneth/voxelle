@@ -47,13 +47,13 @@ describe('sanitizeMessages', () => {
     assert.strictEqual(result[0].role, 'user');
   });
 
-  test('caps history at the last 20 messages', () => {
+  test('caps history at the shared 10-message window (same policy as the client)', () => {
     const many = Array.from({ length: 30 }, (_, i) =>
       raw({ role: i % 2 === 0 ? 'user' : 'assistant', content: `m${i}` })
     );
     const result = sanitizeMessages(many, false);
-    assert.strictEqual(result.length, 20);
-    assert.strictEqual(result[19].content, 'm29');
+    assert.strictEqual(result.length, 10);
+    assert.strictEqual(result[9].content, 'm29');
   });
 
   test('truncates oversized content', () => {
