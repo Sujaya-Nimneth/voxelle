@@ -277,7 +277,8 @@ h1, h2, h3, h4, h5, h6 {
 
 .panel-raised { background: var(--raised); border-radius: var(--radius-chip); }
 
-/* The composer and overlays are the only floating surfaces. */
+/* The composer and overlays are the only floating surfaces.
+   taste-skill-ignore shadow — real floating overlay, not a resting card. */
 .float-shadow { box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24); }
 
 /* Loading placeholder: a flat grey bar at the real text size, no shimmer. */
@@ -285,6 +286,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Respect prefers-reduced-motion: kill decorative loops and travel. */
 @media (prefers-reduced-motion: reduce) {
+  /* taste-skill-ignore bounce — this rule disables attention loops. */
   .animate-pulse, .animate-ping { animation: none; }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

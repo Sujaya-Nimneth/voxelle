@@ -61,7 +61,7 @@ const CAPABILITIES = [
   },
   {
     name: 'Smart home',
-    desc: 'Simulated — no device hub is connected. Results are labeled as simulated.',
+    desc: 'Simulated. No device hub is connected, and results are labeled as simulated.',
     icon: Home,
     status: 'Simulated',
   },
@@ -73,7 +73,7 @@ const CAPABILITIES = [
   },
   {
     name: 'Speech recognition',
-    desc: 'Browser Web Speech API — Chrome, Edge, and Safari.',
+    desc: 'Browser Web Speech API, available in Chrome, Edge, and Safari.',
     icon: Mic,
     status: 'Browser',
   },
@@ -85,7 +85,7 @@ const CAPABILITIES = [
   },
   {
     name: 'Conversation memory',
-    desc: 'Threads live in this browser via localStorage — nothing else leaves your device except API calls.',
+    desc: 'Threads live in this browser via localStorage. Nothing else leaves your device except API calls.',
     icon: HardDrive,
     status: 'Local',
   },
@@ -193,7 +193,7 @@ function Sidebar({
                     <span className={`block text-[13px] leading-snug truncate ${isActive ? 'text-text font-medium' : 'text-muted'}`}>
                       {conv.title}
                     </span>
-                    <span className="block text-[11px] text-faint mt-0.5">
+                    <span className="block text-[12px] text-faint mt-0.5">
                       {formatRelativeTime(conv.updatedAt)}
                     </span>
                   </span>
@@ -232,7 +232,7 @@ function Sidebar({
       <div className="mt-3 p-2.5 flex items-center justify-between border-t border-line">
         <div className="min-w-0">
           <div className="text-[12px] font-medium text-text truncate">Personal workspace</div>
-          <span className="block text-[11px] text-faint truncate">History stays in this browser</span>
+          <span className="block text-[12px] text-faint truncate">History stays in this browser</span>
         </div>
         <button
           onClick={() => setShowSettingsModal(true)}

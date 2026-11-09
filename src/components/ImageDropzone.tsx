@@ -105,7 +105,7 @@ export default function ImageDropzone({
               />
               <div className="flex-1 min-w-0">
                 <p className="text-[13px] text-text font-medium truncate">Image attached</p>
-                <p className="text-[11px] text-faint truncate mt-0.5">Ready for visual analysis</p>
+                <p className="text-[12px] text-faint truncate mt-0.5">Ready for visual analysis</p>
               </div>
               <button
                 type="button"

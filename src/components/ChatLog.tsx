@@ -217,11 +217,11 @@ function ChatLog({
             <p className="mt-5 text-[12px] text-faint">
               {isDemoMode ? (
                 <>
-                  <span className="text-warning">Demo mode</span> — replies are simulated. Add a provider key for live AI.
+                  <span className="text-warning">Demo mode</span>. Replies are simulated. Add a provider key for live AI.
                 </>
               ) : (
                 <>
-                  <span className="text-positive">Live</span> — served by {provider}.
+                  <span className="text-positive">Live</span>. Served by {provider}.
                 </>
               )}
             </p>
@@ -290,10 +290,10 @@ function ChatLog({
                         </p>
                       </div>
                       <div className="flex items-center justify-end gap-2 mt-1 px-1">
-                        <time className="text-[11px] text-faint" dateTime={new Date(message.timestamp).toISOString()}>
+                        <time className="text-[12px] text-faint" dateTime={new Date(message.timestamp).toISOString()}>
                           {formatTime(message.timestamp)}
                         </time>
-                        <span className="text-[11px] text-muted">You</span>
+                        <span className="text-[12px] text-muted">You</span>
                       </div>
                     </div>
                   </motion.div>
@@ -314,7 +314,7 @@ function ChatLog({
                     <div className="flex items-center justify-between mb-1 gap-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-[13px] font-semibold text-text">Voxelle</span>
-                        <time className="text-[11px] text-faint" dateTime={new Date(message.timestamp).toISOString()}>
+                        <time className="text-[12px] text-faint" dateTime={new Date(message.timestamp).toISOString()}>
                           {formatTime(message.timestamp)}
                         </time>
                       </div>
@@ -357,7 +357,7 @@ function ChatLog({
                     {message.truncated && (
                       <div className="mt-2 flex items-center gap-2 text-[12px] text-warning">
                         <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
-                        <span>Response interrupted — partial reply</span>
+                        <span>Response interrupted. Partial reply only.</span>
                         {onRetry && (
                           <button
                             onClick={onRetry}

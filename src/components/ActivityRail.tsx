@@ -113,7 +113,7 @@ function ActivityRail({
                 {toolEvents.map((te) => (
                   <li key={te.id} className="p-3 rounded-[var(--radius-card)] bg-surface border border-line relative overflow-hidden">
                     {te.toolCall.status === 'executing' && (
-                      <div className="absolute top-0 left-0 right-0 h-[2px] bg-accent animate-pulse" />
+                      <div className="absolute top-0 left-0 right-0 h-[2px] bg-accent" />
                     )}
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 text-[13px] font-medium text-text min-w-0">
@@ -133,7 +133,7 @@ function ActivityRail({
                           <X className="w-3.5 h-3.5" aria-hidden="true" />
                         </button>
                       ) : (
-                        <span className="w-2 h-2 rounded-full bg-accent animate-pulse flex-shrink-0" aria-hidden="true" />
+                        <span className="w-2 h-2 rounded-full bg-accent flex-shrink-0" aria-hidden="true" />
                       )}
                     </div>
                     <p className="text-[12px] text-muted mt-1.5 flex items-start gap-1.5">
@@ -162,9 +162,9 @@ function ActivityRail({
                     )}
 
                     {te.simulated && te.toolCall.status === 'completed' && (
-                      <div className="mt-2 flex items-center gap-1 text-[11px] text-warning">
+                      <div className="mt-2 flex items-center gap-1 text-[12px] text-warning">
                         <AlertTriangle className="w-3 h-3" aria-hidden="true" />
-                        <span>Simulated — no device connected</span>
+                        <span>Simulated. No device connected.</span>
                       </div>
                     )}
                   </li>
@@ -193,7 +193,7 @@ function ActivityRail({
                     aria-hidden="true"
                   />
                   <div className="leading-snug text-text">{event.title}</div>
-                  <span className="block text-[11px] text-faint mt-0.5">{humanizeSubtitle(event.subtitle)}</span>
+                  <span className="block text-[12px] text-faint mt-0.5">{humanizeSubtitle(event.subtitle)}</span>
                 </li>
               ))}
             </ul>
@@ -202,7 +202,7 @@ function ActivityRail({
       </div>
 
       {/* Honest privacy note as quiet text, not a callout. */}
-      <div className="mt-6 pt-4 border-t border-line text-[11px] text-faint leading-relaxed flex items-start gap-2">
+      <div className="mt-6 pt-4 border-t border-line text-[12px] text-faint leading-relaxed flex items-start gap-2">
         <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" aria-hidden="true" />
         <p>
           <span className="text-muted font-medium">What leaves this page.</span>{' '}
