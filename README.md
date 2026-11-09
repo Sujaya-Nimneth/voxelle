@@ -1,6 +1,8 @@
 # Voxelle — Voice-First AI Assistant & Workspace
 
-Voxelle is a voice-first, multimodal AI assistant built on **Next.js 16 (App Router)** and **React 19**. It streams replies token-by-token over NDJSON, executes tool calls **on the server** (including a real, downloadable `.ics` calendar file), feeds results back to the model, and talks back through browser speech synthesis — all wrapped in a refined dark interface with an honest telemetry panel.
+Voxelle is a voice-first, multimodal AI assistant built on **Next.js 16 (App Router)** and **React 19**. It streams replies token-by-token over NDJSON, executes tool calls **on the server** (including a real, downloadable `.ics` calendar file), feeds results back to the model, and talks back through browser speech synthesis — wrapped in a flat, token-driven interface with an honest telemetry panel.
+
+The UI uses a three-layer design-token system (primitive → semantic → component), a true-neutral dark theme with a light-mode toggle, and a single signal-blue accent reserved for data and live state. The product's own waveform is the signature element: a persistent signal spine driven by the real microphone analyser. See [`src/app/globals.css`](src/app/globals.css) for tokens and [`src/components/design/`](src/components/design) for the small design primitives.
 
 No API key? It runs in **demo mode** with the same streaming pipeline and the same server-side tool execution.
 
@@ -77,7 +79,7 @@ Design notes worth reading in the source:
 ## 🛠️ Tech stack
 
 - **Next.js 16** (App Router, Turbopack), **React 19**, **TypeScript 5** (strict)
-- **Tailwind CSS v4** design tokens · **Framer Motion 12** · **lucide-react**
+- **Tailwind CSS v4** design tokens · **Framer Motion 12** · **lucide-react** · **Inter** (`next/font`)
 - **Web Speech API** (STT/TTS) · **Web Audio API** (analyser)
 - Google Generative Language API · Groq Cloud API
 - Tests: native **Node.js test runner** (no test framework dependency)

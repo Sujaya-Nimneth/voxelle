@@ -25,9 +25,8 @@ const RAIL_WIDTH = 300;
 function humanizeSubtitle(value: string): string {
   const isShouty = /[A-Z]/.test(value) && !/[a-z]/.test(value) && !value.includes('/');
   if (!isShouty) return value;
-  return value
-    .toLowerCase()
-    .replace(/(^|[\s·])([a-z])/g, (_m, lead: string, ch: string) => lead + ch.toUpperCase());
+  const lower = value.toLowerCase();
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
 
 function ActivityRail({
