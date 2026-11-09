@@ -1,209 +1,308 @@
 @import "tailwindcss";
 
 /*
- * Voxelle design tokens — refined dark.
+ * Voxelle design tokens.
  *
- * One primary accent (cyan), violet reserved for the speaking state, green
- * for success, amber for warnings, rose for danger. Glow is rationed: the
- * listening mic and the status dot earn it; everything else is flat surface
- * + hairline border.
+ * Three layers (primitive -> semantic -> component). Components and Tailwind
+ * utilities reference the semantic layer only; no raw hex belongs in TSX.
+ *
+ * Visual system: true-black flat. Elevation is a lightness step alone, there
+ * are no gradients, glows, glass or shadows on resting surfaces, and colour is
+ * confined to data marks and at most one control. The single accent (signal
+ * blue) is drawn from the product's own waveform/streaming world.
  */
 :root {
-  --ink: #0a0d16;
-  --surface: #0e1320;
-  --surface-2: #131a2b;
-  --line: rgba(148, 163, 184, 0.14);
-  --muted: #7c8aa5;
-  /* Secondary text tiers — both clear WCAG AA (4.5:1) on the dark surfaces. */
-  --dim: #94a3b8; /* labels, metadata, placeholders, inactive controls */
-  --soft: #c7d2e4; /* body-strength text on dark: replies, chips, event text */
-  --text: #eef3ff;
-  --cyan: #22d3ee;
-  --violet: #8b7cf6; /* speaking / synthesis state only */
-  --violet-soft: #cfc6ff;
-  --green: #4ade80; /* success */
-  --danger: #fb7185;
-  --warning: #fbbf24;
+  /* Layer 1 — primitives (raw values, never referenced directly in components) */
+  --p-ground: #0c0d0f;
+  --p-surface: #141517;
+  --p-raised: #202225;
+  --p-border-dark: #232427;
+  --p-ink: #ffffff;
+  --p-ink-2: #b4b4b4;
+  --p-ink-3: #949494;
+  --p-signal: #4cb3f0;
+  --p-positive: #3fc07a;
+  --p-negative: #e5566f;
+  --p-warning: #e5a93b;
+
+  /* Light-mode primitives */
+  --p-ground-light: #fafafa;
+  --p-surface-light: #ffffff;
+  --p-raised-light: #f0f0f0;
+  --p-border-light: #e6e6e6;
+  --p-ink-light: #111111;
+  --p-ink-2-light: #5f6368;
+  --p-ink-3-light: #6b6b6b;
+  --p-signal-light: #1a6fb0;
+  --p-positive-light: #247b50;
+  --p-negative-light: #c4242a;
+  --p-warning-light: #92400e;
+
+  /* Layer 2 — semantic (dark is the default; [data-theme] switches the layer) */
+  --ground: var(--p-ground);
+  --surface: var(--p-surface);
+  --raised: var(--p-raised);
+  --border: var(--p-border-dark);
+  --rule: var(--p-border-dark);
+  --control: #3a3a3e;
+  --text: var(--p-ink);
+  --muted: var(--p-ink-2);
+  --faint: var(--p-ink-3);
+  --accent: var(--p-signal);
+  --accent-ink: var(--p-ground);
+  --primary: var(--p-ink);
+  --primary-ink: var(--p-ground);
+  --positive: var(--p-positive);
+  --negative: var(--p-negative);
+  --warning: var(--p-warning);
+
+  --pill-pos-bg: #172a1d;
+  --pill-pos-ink: var(--p-positive);
+  --pill-neg-bg: #2c1a20;
+  --pill-neg-ink: var(--p-negative);
+  --pill-warn-bg: #2b2414;
+  --pill-warn-ink: var(--p-warning);
+  --pill-neutral-bg: var(--p-raised);
+  --pill-neutral-ink: var(--p-ink);
+
+  --grid: var(--p-border-dark);
+  --chart-span: 0.12;
+
+  /* Layer 3 — component */
+  --radius-card: 8px;
+  --radius-control: 6px;
+  --radius-chip: 4px;
+  --gap: 16px;
+  --card-pad: 20px;
+  --pad: 24px;
+  --nav-row: 36px;
+  --control-height: 36px;
+  --row-height: 48px;
+  --sidebar-w: 232px;
+  --rail-w: 300px;
+  --fs-title: 24px;
+  --fs-section: 16px;
+  --fs-body: 14px;
+  --fs-small: 12px;
+
+  color-scheme: dark;
+}
+
+/* Explicit light theme (also toggled by the user, overriding the OS). */
+[data-theme="light"] {
+  --ground: var(--p-ground-light);
+  --surface: var(--p-surface-light);
+  --raised: var(--p-raised-light);
+  --border: var(--p-border-light);
+  --rule: var(--p-border-light);
+  --control: #c9cbcf;
+  --text: var(--p-ink-light);
+  --muted: var(--p-ink-2-light);
+  --faint: var(--p-ink-3-light);
+  --accent: var(--p-signal-light);
+  --accent-ink: #ffffff;
+  --primary: var(--p-ink-light);
+  --primary-ink: #ffffff;
+  --positive: var(--p-positive-light);
+  --negative: var(--p-negative-light);
+  --warning: var(--p-warning-light);
+
+  --pill-pos-bg: #dcfae5;
+  --pill-pos-ink: #04250e;
+  --pill-neg-bg: #ffedea;
+  --pill-neg-ink: #831c1e;
+  --pill-warn-bg: #fffbeb;
+  --pill-warn-ink: #92400e;
+  --pill-neutral-bg: var(--p-raised-light);
+  --pill-neutral-ink: var(--p-ink-light);
+
+  --grid: #e5e5e5;
+  --chart-span: 0.06;
+  color-scheme: light;
+}
+
+/* Honour the OS only when the user has not chosen a theme. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]):not([data-theme="light"]) {
+    --ground: var(--p-ground-light);
+    --surface: var(--p-surface-light);
+    --raised: var(--p-raised-light);
+    --border: var(--p-border-light);
+    --rule: var(--p-border-light);
+    --control: #c9cbcf;
+    --text: var(--p-ink-light);
+    --muted: var(--p-ink-2-light);
+    --faint: var(--p-ink-3-light);
+    --accent: var(--p-signal-light);
+    --accent-ink: #ffffff;
+    --primary: var(--p-ink-light);
+    --primary-ink: #ffffff;
+    --positive: var(--p-positive-light);
+    --negative: var(--p-negative-light);
+    --warning: var(--p-warning-light);
+    --pill-pos-bg: #dcfae5;
+    --pill-pos-ink: #04250e;
+    --pill-neg-bg: #ffedea;
+    --pill-neg-ink: #831c1e;
+    --pill-warn-bg: #fffbeb;
+    --pill-warn-ink: #92400e;
+    --pill-neutral-bg: var(--p-raised-light);
+    --pill-neutral-ink: var(--p-ink-light);
+    --grid: #e5e5e5;
+    --chart-span: 0.06;
+    color-scheme: light;
+  }
 }
 
 @theme inline {
-  --color-ink: var(--ink);
+  --color-ground: var(--ground);
   --color-surface: var(--surface);
-  --color-surface-2: var(--surface-2);
-  --color-line: var(--line);
-  --color-muted: var(--muted);
-  --color-dim: var(--dim);
-  --color-soft: var(--soft);
+  --color-raised: var(--raised);
+  --color-line: var(--border);
+  --color-rule: var(--rule);
+  --color-control: var(--control);
   --color-text: var(--text);
-  --color-cyan: var(--cyan);
-  --color-violet: var(--violet);
-  --color-violet-soft: var(--violet-soft);
-  --color-green: var(--green);
-  --color-danger: var(--danger);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-primary: var(--primary);
+  --color-primary-ink: var(--primary-ink);
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
   --color-warning: var(--warning);
-  --font-sans: var(--font-manrope), system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: var(--font-dm-mono), ui-monospace, SFMono-Regular, monospace;
+  --color-pill-pos-bg: var(--pill-pos-bg);
+  --color-pill-pos-ink: var(--pill-pos-ink);
+  --color-pill-neg-bg: var(--pill-neg-bg);
+  --color-pill-neg-ink: var(--pill-neg-ink);
+  --color-pill-warn-bg: var(--pill-warn-bg);
+  --color-pill-warn-ink: var(--pill-warn-ink);
+  --color-pill-neutral-bg: var(--pill-neutral-bg);
+  --color-pill-neutral-ink: var(--pill-neutral-ink);
+  --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Migration bridge: old flat colour names map onto the new semantic layer
+     so each intermediate commit stays buildable. Removed once every
+     component references semantic tokens directly. */
+  --color-ink: var(--ground);
+  --color-surface-2: var(--raised);
+  --color-dim: var(--faint);
+  --color-soft: var(--text);
+  --color-cyan: var(--accent);
+  --color-violet: var(--accent);
+  --color-violet-soft: var(--text);
+  --color-green: var(--positive);
+  --color-danger: var(--negative);
 }
 
 * {
   box-sizing: border-box;
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.22) transparent;
+  scrollbar-color: var(--control) transparent;
 }
 
-*::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--control); border-radius: 3px; }
+
+html {
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
-*::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-*::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.22);
-  border-radius: 4px;
-}
-
-*::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.4);
+@media (pointer: coarse) {
+  html { overscroll-behavior-y: auto; }
 }
 
 body {
-  background: #05070d;
+  background: var(--ground);
   color: var(--text);
-  font-family: var(--font-sans);
+  font-family: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: var(--fs-body);
+  line-height: 1.5;
   overflow-x: hidden;
+  overscroll-behavior-x: none;
 }
 
-/* Shared label style: 11px mono uppercase for section headers and metadata. */
-.label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--dim);
-  font-weight: 500;
+::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  color: var(--text);
 }
 
-/* Keyboard focus is always visible and consistent. */
+/* A single visible focus treatment for every interactive element. */
 :focus-visible {
-  outline: 2px solid var(--cyan);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 6px;
+  border-radius: var(--radius-chip);
 }
 
-/* Mobile shell uses 100dvh; match it so the desktop grid doesn't overflow
-   the URL-bar-collapsed viewport. */
-.cyber-shell {
+h1, h2, h3, h4, h5, h6 {
+  text-wrap: balance;
+  font-weight: 600;
+}
+
+/* Section/meta labels: sentence case, readable size, one grey. */
+.label {
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Tabular figures everywhere a number updates. */
+.num, time, [data-num] { font-variant-numeric: tabular-nums; }
+
+/* Shell: one gutter, one ground, three zones on a 1px rule. */
+.app-shell {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--rail-w);
   min-height: 100dvh;
 }
 
-/* Ambient background: two quiet gradients, no grid pattern at rest. */
-.cyber-bg {
-  background: radial-gradient(680px 420px at 78% -10%, rgba(34, 211, 238, 0.06), transparent 66%),
-              radial-gradient(600px 400px at 20% 108%, rgba(139, 124, 246, 0.07), transparent 70%),
-              var(--ink);
-}
-
-.cyber-grid {
-  position: absolute;
-  inset: 0;
-  opacity: 0.12;
-  pointer-events: none;
-  background-image: linear-gradient(rgba(100, 130, 170, 0.1) 1px, transparent 1px),
-                    linear-gradient(90deg, rgba(100, 130, 170, 0.1) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: linear-gradient(to bottom, black, transparent 80%);
-  -webkit-mask-image: linear-gradient(to bottom, black, transparent 80%);
-}
-
-/* Cyber Shell Layout Grid */
-.cyber-shell {
-  position: relative;
-  display: grid;
-  grid-template-columns: 264px minmax(500px, 1fr) 316px;
+.app-main {
+  min-width: 0;
+  min-height: 0;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
 }
 
 @media (max-width: 1180px) {
-  .cyber-shell {
-    grid-template-columns: 240px minmax(400px, 1fr) 280px;
-  }
+  .app-shell { grid-template-columns: 208px minmax(0, 1fr) 268px; }
 }
 
 @media (max-width: 1023px) {
-  .cyber-shell {
-    display: flex;
-    flex-direction: column;
-  }
+  .app-shell { display: flex; flex-direction: column; }
 }
 
-/* Glow budget: only the brand mark earns a halo. */
-.glow-mark {
-  background: linear-gradient(145deg, var(--cyan), #6d7cf7);
-  box-shadow: 0 0 22px rgba(34, 211, 238, 0.25);
+/* Flat surfaces: a lightness step, optionally a 1px rule. Never both a
+   border and a shadow on a resting card. */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
 }
 
-.glow-green {
-  box-shadow: 0 0 8px var(--green);
-}
+.panel-raised { background: var(--raised); border-radius: var(--radius-chip); }
 
-/* Cyber Glass Card */
-.cyber-glass {
-  background: rgba(14, 19, 32, 0.72);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--line);
-}
+/* The composer and overlays are the only floating surfaces. */
+.float-shadow { box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24); }
 
-.cyber-glass-strong {
-  background: rgba(15, 21, 36, 0.9);
-  backdrop-filter: blur(30px);
-  -webkit-backdrop-filter: blur(30px);
-  border: 1px solid var(--line);
-}
+/* Loading placeholder: a flat grey bar at the real text size, no shimmer. */
+.skeleton { background: var(--raised); border-radius: var(--radius-chip); }
 
-/* Shimmer Progress */
-@keyframes shimmer-sweep {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-.shimmer-bar {
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(34, 211, 238, 0.35) 50%,
-    transparent 100%
-  );
-  background-size: 200% 100%;
-  animation: shimmer-sweep 1.8s ease-in-out infinite;
-}
-
-/* Typing Dots */
-@keyframes cyber-bounce {
-  0%, 80%, 100% { transform: translateY(0); }
-  40% { transform: translateY(-5px); }
-}
-
-.cyber-dot-1 { animation: cyber-bounce 1.1s ease-in-out infinite; }
-.cyber-dot-2 { animation: cyber-bounce 1.1s ease-in-out infinite 0.2s; }
-.cyber-dot-3 { animation: cyber-bounce 1.1s ease-in-out infinite 0.4s; }
-
-/* Respect prefers-reduced-motion: kill infinite loops and transitions */
+/* Respect prefers-reduced-motion: kill decorative loops and travel. */
 @media (prefers-reduced-motion: reduce) {
-  .animate-pulse,
-  .animate-ping,
-  .shimmer-bar,
-  .cyber-dot-1,
-  .cyber-dot-2,
-  .cyber-dot-3 {
-    animation: none;
-  }
-
-  *,
-  *::before,
-  *::after {
+  .animate-pulse, .animate-ping { animation: none; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
