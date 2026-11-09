@@ -46,8 +46,7 @@ function ComposerComponent({
     el.style.overflowY = el.scrollHeight > MAX_TEXTAREA_HEIGHT ? 'auto' : 'hidden';
   }, [textInput]);
 
-  // Shortcut key: "/" focuses composer when not already typing and no
-  // dialog/drawer is open
+  // "/" focuses the composer when not already typing and no dialog is open.
   useEffect(() => {
     const handleGlobalKeyDown = (e: globalThis.KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -70,14 +69,12 @@ function ComposerComponent({
       onSendMessage(textInput);
       setTextInput('');
       onSetShowDropzone(false);
-      // Keep input focused
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [textInput, uploadedImage, onSendMessage, onSetShowDropzone]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      // Enter sends; Shift+Enter inserts a newline (multiline drafts).
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         handleSend();
@@ -86,15 +83,21 @@ function ComposerComponent({
     [handleSend]
   );
 
+  const placeholder =
+    status === 'processing'
+      ? 'Thinking and running tools…'
+      : status === 'listening'
+      ? 'Listening to your voice…'
+      : 'Message Voxelle…';
+
   return (
     <div className="flex-shrink-0 px-4 sm:px-8 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
-      {/* Optional Image Dropzone */}
       <AnimatePresence>
         {showDropzone && (
           <motion.div
-            initial={{ opacity: 0, y: 10, height: 0 }}
-            animate={{ opacity: 1, y: 0, height: 'auto' }}
-            exit={{ opacity: 0, y: 10, height: 0 }}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
             className="mb-2.5 max-w-[760px] mx-auto"
           >
             <ImageDropzone
@@ -106,97 +109,90 @@ function ComposerComponent({
         )}
       </AnimatePresence>
 
-      {/* Composer Bar */}
-      <div className="max-w-[760px] mx-auto border border-line bg-[rgba(14,20,34,0.92)] backdrop-blur-2xl shadow-[0_18px_50px_rgba(0,0,0,0.4)] rounded-[14px] p-2 flex items-end gap-2 transition-colors focus-within:border-cyan-500/35">
-        {/* Attach Image Button */}
+      {/* The one floating surface: flat fill, 1px control outline. */}
+      <div className="max-w-[760px] mx-auto panel p-2 flex items-end gap-2 float-shadow focus-within:border-accent transition-colors">
+        <label htmlFor="composer-input" className="sr-only">Message Voxelle</label>
+
         <button
           type="button"
           onClick={() => onSetShowDropzone(!showDropzone)}
-          className={`w-[38px] h-[38px] rounded-[10px] flex items-center justify-center transition-colors cursor-pointer flex-shrink-0 ${
-            uploadedImage
-              ? 'bg-cyan-500/15 text-cyan border border-cyan-500/35'
-              : showDropzone
-              ? 'bg-white/10 text-white'
-              : 'text-dim hover:text-white hover:bg-white/[0.04]'
+          className={`w-11 h-11 rounded-[var(--radius-control)] flex items-center justify-center transition-colors cursor-pointer flex-shrink-0 ${
+            uploadedImage || showDropzone
+              ? 'bg-raised text-accent'
+              : 'text-muted hover:text-text hover:bg-raised'
           }`}
           title="Attach an image (PNG, JPEG, WebP)"
           aria-label="Attach image"
+          aria-pressed={showDropzone}
         >
-          <ImagePlus className="w-4 h-4" />
+          <ImagePlus className="w-4 h-4" aria-hidden="true" />
         </button>
 
-        {/* Text Input */}
         <textarea
           ref={inputRef}
           id="composer-input"
+          name="message"
           rows={1}
           value={textInput}
           onChange={(e) => setTextInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={
-            status === 'processing'
-              ? 'Thinking and executing tools…'
-              : status === 'listening'
-              ? 'Listening to your voice… (say something)'
-              : 'Message Voxelle — press / to focus, Shift+Enter for a new line'
-          }
-          className="flex-1 bg-transparent border-none outline-none resize-none text-[16px] leading-relaxed text-text placeholder:text-dim px-1 py-2 font-sans max-h-[160px]"
-          aria-label="Message Voxelle"
+          placeholder={placeholder}
+          autoComplete="off"
+          aria-describedby="composer-hint"
+          className="flex-1 min-w-0 bg-transparent border-none outline-none resize-none text-[16px] leading-relaxed text-text placeholder:text-faint px-1 py-2.5 font-sans max-h-[160px]"
         />
+        <span id="composer-hint" className="sr-only">
+          Press Enter to send, Shift plus Enter for a new line, or press slash to focus.
+        </span>
 
-        {/* Stop Speaking Button if TTS active */}
         {status === 'speaking' && (
           <button
             type="button"
             onClick={onStopSpeaking}
-            className="px-2.5 py-1.5 rounded-lg text-[11px] font-mono text-violet-soft bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 transition-colors cursor-pointer flex items-center gap-1.5 flex-shrink-0"
+            className="h-11 px-2.5 rounded-[var(--radius-control)] text-[12px] text-muted bg-raised hover:text-text border border-line transition-colors cursor-pointer flex items-center gap-1.5 flex-shrink-0"
             title="Silence speech audio"
             aria-label="Mute assistant speech"
           >
-            <Square className="w-3 h-3 fill-current" />
+            <Square className="w-3 h-3 fill-current" aria-hidden="true" />
             <span className="hidden sm:inline">Mute</span>
           </button>
         )}
 
-        {/* Mic Button */}
         <button
           id="mic-button"
           type="button"
           onClick={onToggleListening}
           disabled={!sttSupported}
-          className={`w-[38px] h-[38px] rounded-full border transition-colors flex items-center justify-center cursor-pointer flex-shrink-0 relative ${
+          className={`w-11 h-11 rounded-[var(--radius-control)] border flex items-center justify-center cursor-pointer flex-shrink-0 transition-colors ${
             status === 'listening'
-              ? 'border-cyan bg-cyan-500/20 text-white shadow-[0_0_18px_var(--cyan)]'
-              : status === 'speaking'
-              ? 'border-violet bg-violet-500/15 text-violet'
-              : 'border-cyan-500/40 bg-cyan-500/[0.08] text-cyan hover:bg-cyan-500/[0.15]'
-          } disabled:opacity-30 disabled:cursor-not-allowed`}
+              ? 'border-accent bg-raised text-accent'
+              : 'border-line text-muted hover:text-text hover:bg-raised'
+          } disabled:opacity-40 disabled:cursor-not-allowed`}
           title={status === 'listening' ? 'Stop listening' : 'Start voice input'}
           aria-label={status === 'listening' ? 'Stop voice recording' : 'Start voice recording'}
         >
           {status === 'listening' ? (
             <motion.span
-              animate={prefersReducedMotion ? undefined : { scale: [1, 1.2, 1] }}
+              animate={prefersReducedMotion ? undefined : { scale: [1, 1.15, 1] }}
               transition={prefersReducedMotion ? { duration: 0 } : { duration: 1, repeat: Infinity }}
               className="flex items-center justify-center"
             >
-              <Mic className="w-4 h-4 text-white" />
+              <Mic className="w-4 h-4" aria-hidden="true" />
             </motion.span>
           ) : (
-            <Mic className="w-4 h-4" />
+            <Mic className="w-4 h-4" aria-hidden="true" />
           )}
         </button>
 
-        {/* Send Button */}
         <button
           type="button"
           onClick={handleSend}
           disabled={!textInput.trim() && !uploadedImage}
-          className="w-[38px] h-[38px] rounded-[10px] bg-cyan text-[#04121a] flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.97] cursor-pointer flex-shrink-0"
+          className="w-11 h-11 rounded-[var(--radius-control)] bg-primary text-primary-ink flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 active:scale-[0.97] cursor-pointer flex-shrink-0"
           title="Send message"
           aria-label="Send message"
         >
-          <Send className="w-4 h-4 stroke-[2.5]" />
+          <Send className="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
     </div>

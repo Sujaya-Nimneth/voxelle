@@ -29,7 +29,7 @@ export default function Modal({
   icon,
   children,
   footer,
-  borderColor = 'rgba(53,230,255,0.25)',
+  borderColor,
 }: ModalProps) {
   const headlineId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -80,9 +80,15 @@ export default function Modal({
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
+    // Everything outside the dialog is inert while it is open (web
+    // guidelines: background must not be focusable behind an overlay).
+    const shell = document.querySelector('.app-shell');
+    shell?.setAttribute('inert', '');
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = originalOverflow;
+      shell?.removeAttribute('inert');
       previouslyFocused?.focus?.();
     };
   }, [isOpen, onClose]);
@@ -104,41 +110,41 @@ export default function Modal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/75 backdrop-blur-md"
+            className="fixed inset-0 bg-black/70"
           />
 
           {/* Modal Dialog Card */}
           <motion.div
             ref={dialogRef}
             tabIndex={-1}
-            initial={{ opacity: 0, scale: 0.95, y: 12 }}
+            initial={{ opacity: 0, scale: 0.98, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 12 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            exit={{ opacity: 0, scale: 0.98, y: 8 }}
+            transition={{ duration: 0.18 }}
             onClick={(e) => e.stopPropagation()}
-            style={{ borderColor }}
-            className="relative w-full max-w-lg cyber-glass-strong rounded-2xl p-6 border shadow-[0_20px_60px_rgba(0,0,0,0.85)] z-10 max-h-[90vh] flex flex-col outline-none"
+            style={borderColor ? { borderColor } : undefined}
+            className="relative w-full max-w-lg panel bg-surface p-6 float-shadow z-10 max-h-[90vh] flex flex-col outline-none overscroll-contain"
           >
             {/* Header */}
             <div className="flex items-center justify-between pb-4 border-b border-line flex-shrink-0">
               <div className="flex items-center gap-2.5">
                 {icon}
-                <h3 id={headlineId} className="font-semibold text-lg text-white">
+                <h2 id={headlineId} className="text-[16px] font-semibold text-text">
                   {title}
-                </h3>
+                </h2>
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="p-1.5 rounded-lg text-muted hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                className="p-1.5 rounded-[var(--radius-control)] text-muted hover:text-text hover:bg-raised transition-colors cursor-pointer"
                 aria-label="Close dialog"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
 
             {/* Content Body */}
-            <div className="mt-4 overflow-y-auto flex-1 pr-1">{children}</div>
+            <div className="mt-4 overflow-y-auto flex-1 pr-1 overscroll-contain">{children}</div>
 
             {/* Optional Footer */}
             {footer && <div className="mt-5 flex justify-end flex-shrink-0">{footer}</div>}

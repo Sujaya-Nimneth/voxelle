@@ -10,6 +10,8 @@ import ChatLog from '@/components/ChatLog';
 import StatusBadge from '@/components/StatusBadge';
 import PermissionWarning from '@/components/PermissionWarning';
 import { Composer } from '@/components/Composer';
+import BrandMark, { SignalStrip } from '@/components/design/BrandMark';
+import ThemeToggle from '@/components/design/ThemeToggle';
 
 export default function Home() {
   const {
@@ -50,11 +52,8 @@ export default function Home() {
   const [warningDismissed, setWarningDismissed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isMobileRailOpen, setIsMobileRailOpen] = useState(false);
-  // Composer's image dropzone lives here so the empty-state "vision" card can
-  // open it too.
   const [showDropzone, setShowDropzone] = useState(false);
 
-  // Derive warning visibility cleanly without useEffect setState
   const hasNewError = sttError !== null && sttError !== dismissedError;
   const hasWarning =
     (!warningDismissed || hasNewError) &&
@@ -65,8 +64,6 @@ export default function Home() {
     setDismissedError(sttError);
   }, [sttError]);
 
-  // Stable handler identities so memoized Sidebar/ChatLog/ActivityRail don't
-  // re-render on every parent render.
   const handleCloseSidebarMobile = useCallback(() => setIsMobileSidebarOpen(false), []);
   const handleCloseRailMobile = useCallback(() => setIsMobileRailOpen(false), []);
   const handleSpeakText = useCallback((text: string) => speakMessage(text), [speakMessage]);
@@ -83,26 +80,20 @@ export default function Home() {
   }, [messages]);
 
   return (
-    <div className="min-h-screen relative overflow-hidden cyber-bg">
-      {/* Background grid */}
-      <div className="cyber-grid" />
-
-      {/* Keyboard users can jump straight to the composer */}
+    <div className="min-h-screen relative bg-ground">
       <a
         href="#composer-input"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-2 focus:rounded-lg focus:bg-surface-2 focus:border focus:border-cyan-500/40 focus:text-sm focus:text-white"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-2 focus:rounded-[var(--radius-control)] focus:bg-surface focus:border focus:border-line focus:text-sm focus:text-text"
       >
         Skip to message input
       </a>
 
-      {/* Screen-reader announcement of completed replies */}
       <div role="status" aria-live="polite" className="sr-only">
         {lastReply}
       </div>
 
-      {/* 3-Column Shell */}
-      <div className="cyber-shell min-h-screen">
-        {/* ─── Left Sidebar (264px) ─── */}
+      <div className="app-shell">
+        {/* Left — labelled conversation sidebar */}
         <Sidebar
           conversations={conversations}
           activeConversationId={activeConversationId}
@@ -118,26 +109,26 @@ export default function Home() {
           onUpdateTtsSettings={updateTtsSettings}
         />
 
-        {/* ─── Center Command Center ─── */}
-        <main className="flex flex-col min-w-0 h-[100dvh] overflow-hidden">
-          {/* Header */}
-          <header className="h-[60px] px-5 sm:px-8 flex items-center justify-between border-b border-line flex-shrink-0 z-20 bg-[rgba(8,11,20,0.6)] backdrop-blur-md">
-            <div className="flex items-center gap-3">
-              {/* Mobile Sidebar Toggle */}
+        {/* Center — the conversation, the screen's one question */}
+        <main className="app-main" id="main-content">
+          <header className="h-[56px] px-5 sm:px-8 flex items-center justify-between border-b border-line flex-shrink-0 bg-ground">
+            <div className="flex items-center gap-3 min-w-0">
               <button
                 onClick={() => setIsMobileSidebarOpen(true)}
-                className="lg:hidden p-2 rounded-lg text-muted hover:text-white hover:bg-white/5 cursor-pointer"
+                className="lg:hidden p-2 -ml-2 rounded-[var(--radius-control)] text-muted hover:text-text hover:bg-raised cursor-pointer"
                 aria-label="Open workspace menu"
               >
-                <Menu className="w-5 h-5" />
+                <Menu className="w-5 h-5" aria-hidden="true" />
               </button>
 
-              <div className="label">
-                Workspace / <span className="text-soft">Command Center</span>
-              </div>
+              <BrandMark size={22} className="lg:hidden" />
+              <p className="text-[13px] text-faint hidden sm:block truncate">
+                Workspace / <span className="text-text">Command center</span>
+              </p>
+              <span className="text-[13px] text-text sm:hidden truncate">Command center</span>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-shrink-0">
               <StatusBadge
                 status={status}
                 provider={activeProvider}
@@ -145,20 +136,20 @@ export default function Home() {
                 isDegraded={isDegraded}
                 degradedReason={degradedReason}
               />
-
-              {/* Mobile Activity Rail Toggle */}
+              <span className="hidden md:inline-flex">
+                <SignalStrip status={status} compact />
+              </span>
+              <ThemeToggle />
               <button
                 onClick={() => setIsMobileRailOpen(true)}
-                className="lg:hidden p-2 rounded-lg text-muted hover:text-white hover:bg-white/5 font-mono text-[10px] flex items-center gap-1.5 cursor-pointer border border-line"
-                aria-label="Open activity rail"
+                className="lg:hidden p-2 rounded-[var(--radius-control)] text-muted hover:text-text hover:bg-raised cursor-pointer border border-line"
+                aria-label="Open session activity"
               >
-                <Activity className="w-3.5 h-3.5 text-green" />
-                <span>LOG</span>
+                <Activity className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
           </header>
 
-          {/* Permission / Capability Warning */}
           <AnimatePresence>
             {hasWarning && (
               <PermissionWarning
@@ -170,7 +161,6 @@ export default function Home() {
             )}
           </AnimatePresence>
 
-          {/* Conversation Log View */}
           <ChatLog
             messages={messages}
             isProcessing={status === 'processing' && !messages.some((m) => m.isStreaming)}
@@ -185,7 +175,6 @@ export default function Home() {
             onSpeakText={handleSpeakText}
           />
 
-          {/* Isolated Memoized Composer Container */}
           <Composer
             status={status}
             sttSupported={sttSupported}
@@ -199,7 +188,7 @@ export default function Home() {
           />
         </main>
 
-        {/* ─── Right Activity Rail (316px) ─── */}
+        {/* Right — demoted secondary stream */}
         <ActivityRail
           status={status}
           sessionEvents={sessionEvents}
