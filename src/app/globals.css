@@ -181,19 +181,6 @@
   --color-pill-neutral-ink: var(--pill-neutral-ink);
   --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
-
-  /* Migration bridge: old flat colour names map onto the new semantic layer
-     so each intermediate commit stays buildable. Removed once every
-     component references semantic tokens directly. */
-  --color-ink: var(--ground);
-  --color-surface-2: var(--raised);
-  --color-dim: var(--faint);
-  --color-soft: var(--text);
-  --color-cyan: var(--accent);
-  --color-violet: var(--accent);
-  --color-violet-soft: var(--text);
-  --color-green: var(--positive);
-  --color-danger: var(--negative);
 }
 
 * {

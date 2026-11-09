@@ -31,24 +31,24 @@ function CopyButton({ text }: { text: string }) {
     <button
       type="button"
       onClick={handleCopy}
-      className="absolute top-2 right-2 p-1.5 rounded-md text-dim hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+      className="absolute top-2 right-2 p-1.5 rounded-[var(--radius-control)] text-muted hover:text-text hover:bg-raised transition-colors cursor-pointer"
       aria-label="Copy code to clipboard"
       title="Copy code"
     >
-      {copied ? <Check className="w-3.5 h-3.5 text-green" /> : <Copy className="w-3.5 h-3.5" />}
+      {copied ? <Check className="w-3.5 h-3.5 text-positive" aria-hidden="true" /> : <Copy className="w-3.5 h-3.5" aria-hidden="true" />}
     </button>
   );
 }
 
 function CodeBlock({ code, language }: { code: string; language?: string }) {
   return (
-    <div className="relative group my-2 rounded-xl border border-line bg-[rgba(5,8,14,0.85)] overflow-hidden">
+    <div className="relative group my-2 rounded-[var(--radius-card)] border border-line bg-ground overflow-hidden">
       <div className="flex items-center justify-between px-3.5 pt-2 pb-0">
-        <span className="label !text-[10px]">{language || 'code'}</span>
+        <span className="text-[11px] text-faint">{language || 'code'}</span>
       </div>
       <CopyButton text={code} />
       <pre className="overflow-x-auto px-3.5 pb-3 pt-1.5">
-        <code className="font-mono text-[12px] leading-relaxed text-soft">{code}</code>
+        <code className="font-mono text-[12px] leading-relaxed text-text">{code}</code>
       </pre>
     </div>
   );
@@ -68,7 +68,7 @@ function MarkdownMessage({ content }: MarkdownMessageProps) {
         return (
           <code
             key={i}
-            className="font-mono text-[12px] px-1.5 py-0.5 rounded bg-white/[0.07] text-cyan border border-white/5"
+            className="font-mono text-[12px] px-1.5 py-0.5 rounded-[var(--radius-chip)] bg-raised text-text border border-line"
           >
             {part.slice(1, -1)}
           </code>
@@ -76,14 +76,14 @@ function MarkdownMessage({ content }: MarkdownMessageProps) {
       }
       if (part.startsWith('**') && part.endsWith('**')) {
         return (
-          <strong key={i} className="font-semibold text-white">
+          <strong key={i} className="font-semibold text-text">
             {part.slice(2, -2)}
           </strong>
         );
       }
       if (part.startsWith('*') && part.endsWith('*')) {
         return (
-          <em key={i} className="italic text-soft">
+          <em key={i} className="italic text-muted">
             {part.slice(1, -1)}
           </em>
         );
@@ -98,7 +98,7 @@ function MarkdownMessage({ content }: MarkdownMessageProps) {
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-cyan underline decoration-cyan/40 hover:decoration-cyan underline-offset-2"
+              className="text-accent underline decoration-accent/40 hover:decoration-accent underline-offset-2"
             >
               {link[1]}
             </a>
@@ -126,7 +126,7 @@ function MarkdownMessage({ content }: MarkdownMessageProps) {
         return (
           <div
             key={key}
-            className={`${isH3 ? 'text-[14px]' : 'text-[15px]'} font-bold text-white mt-2 mb-0.5`}
+            className={`${isH3 ? 'text-[14px]' : 'text-[15px]'} font-semibold text-text mt-2 mb-0.5`}
           >
             {renderInline(heading[2])}
           </div>
@@ -137,7 +137,7 @@ function MarkdownMessage({ content }: MarkdownMessageProps) {
       if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
         return (
           <div key={key} className="flex items-start gap-2 pl-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-cyan mt-[9px] flex-shrink-0" />
+            <span className="w-1.5 h-1.5 rounded-full bg-accent mt-[9px] flex-shrink-0" aria-hidden="true" />
             <span>{renderInline(trimmed.slice(2))}</span>
           </div>
         );
@@ -148,7 +148,7 @@ function MarkdownMessage({ content }: MarkdownMessageProps) {
       if (numMatch) {
         return (
           <div key={key} className="flex items-start gap-2 pl-1">
-            <span className="font-mono text-[10px] text-cyan font-bold mt-1">
+            <span className="font-mono text-[11px] text-accent font-semibold mt-1">
               {numMatch[1]}.
             </span>
             <span>{renderInline(numMatch[2])}</span>
