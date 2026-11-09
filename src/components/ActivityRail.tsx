@@ -18,6 +18,18 @@ interface ActivityRailProps {
 
 const RAIL_WIDTH = 300;
 
+// Telemetry subtitles arrive as terse uppercase labels from the event log.
+// Render them in the product's sentence-case voice without touching the
+// honest data or the hooks that emit it; real data strings (paths, timings)
+// are left exactly as they are.
+function humanizeSubtitle(value: string): string {
+  const isShouty = /[A-Z]/.test(value) && !/[a-z]/.test(value) && !value.includes('/');
+  if (!isShouty) return value;
+  return value
+    .toLowerCase()
+    .replace(/(^|[\s·])([a-z])/g, (_m, lead: string, ch: string) => lead + ch.toUpperCase());
+}
+
 function ActivityRail({
   status,
   sessionEvents,
@@ -181,7 +193,7 @@ function ActivityRail({
                     aria-hidden="true"
                   />
                   <div className="leading-snug text-text">{event.title}</div>
-                  <span className="block text-[11px] text-faint mt-0.5">{event.subtitle}</span>
+                  <span className="block text-[11px] text-faint mt-0.5">{humanizeSubtitle(event.subtitle)}</span>
                 </li>
               ))}
             </ul>

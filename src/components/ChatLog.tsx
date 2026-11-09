@@ -86,6 +86,7 @@ function ChatLog({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const isNearBottomRef = useRef(true);
+  const didMountRef = useRef(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -113,8 +114,14 @@ function ChatLog({
     }
   };
 
-  // Smart auto-scroll only if already near bottom
+  // Smart auto-scroll only when new content arrives and the reader is already
+  // near the bottom. Skip the initial mount: scrollHeight on a tall empty
+  // state would otherwise scroll the title under the sticky header.
   useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
     if (scrollRef.current && isNearBottomRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
@@ -155,7 +162,7 @@ function ChatLog({
       ref={scrollRef}
       onScroll={handleScroll}
       id="chat-log"
-      className="flex-1 overflow-y-auto px-5 sm:px-8 lg:px-10 py-8 relative"
+      className="flex-1 overflow-y-auto px-5 sm:px-8 lg:px-10 pt-8 pb-6 relative"
       aria-label="Conversation"
     >
       <div className="max-w-[760px] mx-auto">
@@ -171,17 +178,17 @@ function ChatLog({
             </p>
 
             {/* The signature: one big signal, one primary action. */}
-            <div className="mt-8 panel p-6 flex flex-col sm:flex-row items-start sm:items-center gap-6">
+            <div className="mt-8 panel p-6">
               <WelcomeSignal />
-              <div className="flex-shrink-0">
+              <div className="mt-4 flex items-center gap-4 border-t border-line pt-4">
                 <button
                   onClick={onStartVoice}
-                  className="inline-flex items-center gap-2 h-10 px-4 rounded-[var(--radius-control)] bg-primary text-primary-ink text-[13px] font-semibold hover:opacity-90 active:scale-[0.98] transition cursor-pointer"
+                  className="inline-flex items-center gap-2 h-10 px-4 rounded-[var(--radius-control)] bg-primary text-primary-ink text-[13px] font-semibold hover:opacity-90 active:scale-[0.98] transition cursor-pointer flex-shrink-0"
                 >
                   <Mic className="w-4 h-4" aria-hidden="true" />
                   Start talking
                 </button>
-                <p className="text-[12px] text-faint mt-2">Or type below</p>
+                <p className="text-[12px] text-faint">Or type a message below</p>
               </div>
             </div>
 
