@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { AppThemeProvider } from "@/components/AppThemeProvider";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -16,6 +17,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
+  viewportFit: "cover",
 };
 
 export const metadata: Metadata = {
@@ -38,19 +40,25 @@ export const metadata: Metadata = {
   },
 };
 
-// Applies the persisted (or OS) theme before paint to avoid a flash.
-const themeInit = `(function(){try{var t=localStorage.getItem('voxelle-theme');if(!t){t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();`;
+// Applies the persisted theme attribute before paint to avoid a flash while
+// staying aligned with Astryx's Root Theme (which removes data-theme in 'system').
+const themeInit = `(function(){try{document.documentElement.setAttribute('data-astryx-theme','voxelle');var t=localStorage.getItem('voxelle-theme');if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`;
 
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`} suppressHydrationWarning>
+    <html
+      lang="en"
+      data-astryx-theme="voxelle"
+      className={`${inter.variable} h-full antialiased`}
+      suppressHydrationWarning
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
       </head>
       <body className="min-h-full flex flex-col font-sans" suppressHydrationWarning>
-        {children}
+        <AppThemeProvider>{children}</AppThemeProvider>
       </body>
     </html>
   );

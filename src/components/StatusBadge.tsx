@@ -1,45 +1,43 @@
 'use client';
 
-import StatusText from './design/StatusText';
+import { Circle, Loader2, Mic, Volume2 } from 'lucide-react';
+import { Badge, type BadgeVariant } from '@astryxdesign/core/Badge';
 import type { AssistantStatus } from '@/types/types';
 
 interface StatusBadgeProps {
   status: AssistantStatus;
-  provider?: string;
-  model?: string;
   isDegraded?: boolean;
-  degradedReason?: string | null;
 }
 
-function providerLabel(provider: string): string {
-  if (provider === 'mock') return 'Demo mode';
-  return provider.charAt(0).toUpperCase() + provider.slice(1);
-}
+const STATUS_META: Record<
+  AssistantStatus,
+  { label: string; variant: BadgeVariant; Icon: typeof Circle; spin?: boolean }
+> = {
+  idle: { label: 'Ready', variant: 'neutral', Icon: Circle },
+  listening: { label: 'Listening', variant: 'info', Icon: Mic },
+  processing: { label: 'Thinking', variant: 'warning', Icon: Loader2, spin: true },
+  speaking: { label: 'Speaking', variant: 'blue', Icon: Volume2 },
+};
 
-/** Neutral status + a quiet provider line. No coloured pill per state. */
-export default function StatusBadge({
-  status,
-  provider,
-  model,
-  isDegraded,
-  degradedReason,
-}: StatusBadgeProps) {
+/**
+ * Header / telemetry status badge with non-color icon + text cues.
+ */
+export default function StatusBadge({ status, isDegraded }: StatusBadgeProps) {
+  const meta = STATUS_META[status];
+  const { Icon } = meta;
+
   return (
-    <div className="flex items-center gap-3">
-      {provider && (
-        <span
-          className="hidden md:inline-block text-[11px] text-faint max-w-[220px] truncate"
-          title={
-            isDegraded
-              ? `Fell back to demo mode${degradedReason ? `: ${degradedReason}` : ''}`
-              : `AI provider: ${provider}${model ? ` (${model})` : ''}`
-          }
-        >
-          {providerLabel(provider)}
-          {isDegraded ? ' · fallback' : ''}
-        </span>
-      )}
-      <StatusText status={status} />
-    </div>
+    <Badge
+      variant={isDegraded && status === 'idle' ? 'warning' : meta.variant}
+      label={isDegraded && status === 'idle' ? 'Demo mode' : meta.label}
+      icon={
+        <Icon
+          size={12}
+          strokeWidth={2}
+          aria-hidden="true"
+          className={meta.spin ? 'animate-spin' : undefined}
+        />
+      }
+    />
   );
 }

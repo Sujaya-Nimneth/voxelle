@@ -1,151 +1,136 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useDropzone } from 'react-dropzone';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ImagePlus, X, AlertCircle } from 'lucide-react';
+import { FileInput } from '@astryxdesign/core/FileInput';
+import { VStack } from '@astryxdesign/core/Stack';
+import { Text } from '@astryxdesign/core/Text';
+import { VisuallyHidden } from '@astryxdesign/core/VisuallyHidden';
 
-interface ImageDropzoneProps {
-  uploadedImage: string | null;
-  onImageUpload: (image: string) => void;
-  onImageRemove: () => void;
+export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+
+export function validateAndReadImageFile(
+  file: File,
+  onSuccess: (dataUrl: string, file: File) => void,
+  onError: (msg: string) => void
+) {
+  if (!file.type.startsWith('image/')) {
+    onError('Please choose an image file (PNG, JPEG, WebP, or GIF).');
+    return;
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    onError('Image is too large. Maximum size is 4 MB.');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    if (typeof reader.result === 'string') {
+      onError('');
+      onSuccess(reader.result, file);
+    }
+  };
+  reader.onerror = () => {
+    onError('Could not read the selected image file.');
+  };
+  reader.readAsDataURL(file);
 }
 
+export interface ImageDropzoneProps {
+  image: string | null;
+  onImageChange: (dataUrl: string | null, fileName?: string) => void;
+  onFileError?: (message: string) => void;
+  isDropzoneVisible?: boolean;
+  enableGlobalPaste?: boolean;
+}
+
+/**
+ * Wraps Astryx `FileInput` (dropzone mode) with optional Ctrl/Cmd+V image paste
+ * support and an accessible polite live region for validation messages.
+ */
 export default function ImageDropzone({
-  uploadedImage,
-  onImageUpload,
-  onImageRemove,
+  image,
+  onImageChange,
+  onFileError,
+  isDropzoneVisible = true,
+  enableGlobalPaste = false,
 }: ImageDropzoneProps) {
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string>('');
 
-  const handleProcessFile = useCallback(
+  // Clear tracked File handle when parent clears uploadedImage (e.g. on send)
+  const effectiveFile = image ? selectedFile : null;
+
+  const handleError = useCallback(
+    (msg: string) => {
+      setErrorMsg(msg);
+      if (msg && onFileError) onFileError(msg);
+    },
+    [onFileError]
+  );
+
+  const handleFile = useCallback(
     (file: File) => {
-      setErrorMessage(null);
-      if (!file.type.startsWith('image/')) {
-        setErrorMessage('Only image files (PNG, JPEG, WebP, GIF) are supported.');
-        return;
-      }
-      if (file.size > 10 * 1024 * 1024) {
-        setErrorMessage('Image size must be 10 MB or less.');
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          onImageUpload(reader.result);
-        } else {
-          setErrorMessage('Could not read the image file. Please try again.');
-        }
-      };
-      reader.onerror = () => {
-        setErrorMessage('Could not read the image file. Please try again.');
-      };
-      reader.readAsDataURL(file);
+      validateAndReadImageFile(
+        file,
+        (dataUrl, validFile) => {
+          setSelectedFile(validFile);
+          onImageChange(dataUrl, validFile.name);
+        },
+        handleError
+      );
     },
-    [onImageUpload]
+    [handleError, onImageChange]
   );
 
-  const onDrop = useCallback(
-    (acceptedFiles: File[], rejectedFiles: unknown[]) => {
-      if (rejectedFiles && rejectedFiles.length > 0) {
-        setErrorMessage('File rejected. Please upload an image under 10 MB.');
-        return;
-      }
-      const file = acceptedFiles[0];
-      if (file) handleProcessFile(file);
-    },
-    [handleProcessFile]
-  );
-
-  // Global paste support
   useEffect(() => {
-    const handlePaste = (e: ClipboardEvent) => {
+    if (!enableGlobalPaste) return;
+    const onPaste = (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
       if (!items) return;
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].type.indexOf('image') !== -1) {
-          const file = items[i].getAsFile();
-          if (file) {
-            handleProcessFile(file);
-            break;
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          const pasted = item.getAsFile();
+          if (pasted) {
+            e.preventDefault();
+            handleFile(pasted);
+            return;
           }
         }
       }
     };
-    window.addEventListener('paste', handlePaste);
-    return () => window.removeEventListener('paste', handlePaste);
-  }, [handleProcessFile]);
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp'] },
-    maxFiles: 1,
-    maxSize: 10 * 1024 * 1024,
-  });
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [enableGlobalPaste, handleFile]);
 
   return (
-    <div className="w-full">
-      <AnimatePresence mode="wait">
-        {uploadedImage ? (
-          <motion.div
-            key="preview"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-          >
-            <div className="panel flex items-center gap-3 p-2.5">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={uploadedImage}
-                alt="Attached image preview"
-                width={48}
-                height={48}
-                className="h-12 w-12 rounded-[var(--radius-chip)] object-cover flex-shrink-0 border border-line"
-              />
-              <div className="flex-1 min-w-0">
-                <p className="text-[13px] text-text font-medium truncate">Image attached</p>
-                <p className="text-[12px] text-faint truncate mt-0.5">Ready for visual analysis</p>
-              </div>
-              <button
-                type="button"
-                onClick={onImageRemove}
-                className="p-1.5 rounded-[var(--radius-control)] hover:bg-raised text-muted hover:text-text transition-colors cursor-pointer"
-                aria-label="Remove attached image"
-              >
-                <X className="w-4 h-4" aria-hidden="true" />
-              </button>
-            </div>
-          </motion.div>
-        ) : (
-          <motion.div key="dropzone" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div
-              {...getRootProps()}
-              className={`rounded-[var(--radius-card)] border border-dashed transition-colors cursor-pointer flex items-center justify-center py-3 px-4 ${
-                isDragActive ? 'border-accent bg-raised' : 'border-line hover:border-accent bg-surface'
-              }`}
-            >
-              <input {...getInputProps()} />
-              <div className="flex items-center gap-2 text-muted">
-                <ImagePlus className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-                <span className="text-[12px]">
-                  {isDragActive ? 'Drop image to analyze…' : 'Drop an image, click to browse, or paste from clipboard'}
-                </span>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Async validation announced politely, in the field's own voice. */}
-      <div aria-live="polite" role="status">
-        {errorMessage && (
-          <p className="text-[12px] text-negative mt-1.5 px-1 flex items-center gap-1">
-            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
-            <span>{errorMessage}</span>
-          </p>
-        )}
-      </div>
-    </div>
+    <VStack gap={2}>
+      <VisuallyHidden>
+        <Text as="span" role="status" aria-live="polite">
+          {errorMsg}
+        </Text>
+      </VisuallyHidden>
+      {isDropzoneVisible ? (
+        <FileInput
+          label="Attach image"
+          isLabelHidden
+          mode="dropzone"
+          accept="image/*"
+          maxSize={MAX_IMAGE_BYTES}
+          value={effectiveFile}
+          width="100%"
+          placeholder="Drop an image, click to browse, or paste with ⌘V (max 4 MB)"
+          status={errorMsg ? { type: 'error', message: errorMsg } : undefined}
+          onChange={(files) => {
+            if (!files) {
+              setSelectedFile(null);
+              setErrorMsg('');
+              onImageChange(null);
+              return;
+            }
+            const file = Array.isArray(files) ? files[0] : files;
+            if (file) handleFile(file);
+          }}
+        />
+      ) : null}
+    </VStack>
   );
 }
