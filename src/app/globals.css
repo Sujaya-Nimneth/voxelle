@@ -1,294 +1,92 @@
+@layer reset, theme, base, astryx-base, astryx-theme, components, utilities;
+
 @import "tailwindcss";
+@import "@astryxdesign/core/reset.css";
+@import "@astryxdesign/core/astryx.css";
+@import "../themes/voxelle/voxelle.css";
 
-/*
- * Voxelle design tokens.
- *
- * Three layers (primitive -> semantic -> component). Components and Tailwind
- * utilities reference the semantic layer only; no raw hex belongs in TSX.
- *
- * Visual system: true-black flat. Elevation is a lightness step alone, there
- * are no gradients, glows, glass or shadows on resting surfaces, and colour is
- * confined to data marks and at most one control. The single accent (signal
- * blue) is drawn from the product's own waveform/streaming world.
- */
-:root {
-  /* Layer 1 — primitives (raw values, never referenced directly in components) */
-  --p-ground: #0c0d0f;
-  --p-surface: #141517;
-  --p-raised: #202225;
-  --p-border-dark: #232427;
-  --p-ink: #ffffff;
-  --p-ink-2: #b4b4b4;
-  --p-ink-3: #949494;
-  --p-signal: #4cb3f0;
-  --p-positive: #3fc07a;
-  --p-negative: #e5566f;
-  --p-warning: #e5a93b;
+@layer base {
+  * {
+    box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-emphasized) transparent;
+  }
 
-  /* Light-mode primitives */
-  --p-ground-light: #fafafa;
-  --p-surface-light: #ffffff;
-  --p-raised-light: #f0f0f0;
-  --p-border-light: #e6e6e6;
-  --p-ink-light: #111111;
-  --p-ink-2-light: #5f6368;
-  --p-ink-3-light: #6b6b6b;
-  --p-signal-light: #1a6fb0;
-  --p-positive-light: #247b50;
-  --p-negative-light: #c4242a;
-  --p-warning-light: #92400e;
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
 
-  /* Layer 2 — semantic (dark is the default; [data-theme] switches the layer) */
-  --ground: var(--p-ground);
-  --surface: var(--p-surface);
-  --raised: var(--p-raised);
-  --border: var(--p-border-dark);
-  --rule: var(--p-border-dark);
-  --control: #3a3a3e;
-  --text: var(--p-ink);
-  --muted: var(--p-ink-2);
-  --faint: var(--p-ink-3);
-  --accent: var(--p-signal);
-  --accent-ink: var(--p-ground);
-  --primary: var(--p-ink);
-  --primary-ink: var(--p-ground);
-  --positive: var(--p-positive);
-  --negative: var(--p-negative);
-  --warning: var(--p-warning);
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
 
-  --pill-pos-bg: #172a1d;
-  --pill-pos-ink: var(--p-positive);
-  --pill-neg-bg: #2c1a20;
-  --pill-neg-ink: var(--p-negative);
-  --pill-warn-bg: #2b2414;
-  --pill-warn-ink: var(--p-warning);
-  --pill-neutral-bg: var(--p-raised);
-  --pill-neutral-ink: var(--p-ink);
+  *::-webkit-scrollbar-thumb {
+    background: var(--color-border-emphasized);
+    border-radius: var(--radius-full);
+  }
 
-  --grid: var(--p-border-dark);
-  --chart-span: 0.12;
+  html {
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
 
-  /* Layer 3 — component */
-  --radius-card: 8px;
-  --radius-control: 6px;
-  --radius-chip: 4px;
-  --gap: 16px;
-  --card-pad: 20px;
-  --pad: 24px;
-  --nav-row: 36px;
-  --control-height: 36px;
-  --row-height: 48px;
-  --sidebar-w: 232px;
-  --rail-w: 300px;
-  --fs-title: 24px;
-  --fs-section: 16px;
-  --fs-body: 14px;
-  --fs-small: 12px;
+  @media (pointer: coarse) {
+    html {
+      overscroll-behavior-y: auto;
+    }
+  }
 
-  color-scheme: dark;
-}
+  body {
+    background: var(--color-background-body);
+    color: var(--color-text-primary);
+    font-family: var(--font-family-body);
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+  }
 
-/* Explicit light theme (also toggled by the user, overriding the OS). */
-[data-theme="light"] {
-  --ground: var(--p-ground-light);
-  --surface: var(--p-surface-light);
-  --raised: var(--p-raised-light);
-  --border: var(--p-border-light);
-  --rule: var(--p-border-light);
-  --control: #c9cbcf;
-  --text: var(--p-ink-light);
-  --muted: var(--p-ink-2-light);
-  --faint: var(--p-ink-3-light);
-  --accent: var(--p-signal-light);
-  --accent-ink: #ffffff;
-  --primary: var(--p-ink-light);
-  --primary-ink: #ffffff;
-  --positive: var(--p-positive-light);
-  --negative: var(--p-negative-light);
-  --warning: var(--p-warning-light);
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent) 28%, transparent);
+    color: var(--color-text-primary);
+  }
 
-  --pill-pos-bg: #dcfae5;
-  --pill-pos-ink: #04250e;
-  --pill-neg-bg: #ffedea;
-  --pill-neg-ink: #831c1e;
-  --pill-warn-bg: #fffbeb;
-  --pill-warn-ink: #92400e;
-  --pill-neutral-bg: var(--p-raised-light);
-  --pill-neutral-ink: var(--p-ink-light);
-
-  --grid: #e5e5e5;
-  --chart-span: 0.06;
-  color-scheme: light;
-}
-
-/* Honour the OS only when the user has not chosen a theme. */
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]):not([data-theme="light"]) {
-    --ground: var(--p-ground-light);
-    --surface: var(--p-surface-light);
-    --raised: var(--p-raised-light);
-    --border: var(--p-border-light);
-    --rule: var(--p-border-light);
-    --control: #c9cbcf;
-    --text: var(--p-ink-light);
-    --muted: var(--p-ink-2-light);
-    --faint: var(--p-ink-3-light);
-    --accent: var(--p-signal-light);
-    --accent-ink: #ffffff;
-    --primary: var(--p-ink-light);
-    --primary-ink: #ffffff;
-    --positive: var(--p-positive-light);
-    --negative: var(--p-negative-light);
-    --warning: var(--p-warning-light);
-    --pill-pos-bg: #dcfae5;
-    --pill-pos-ink: #04250e;
-    --pill-neg-bg: #ffedea;
-    --pill-neg-ink: #831c1e;
-    --pill-warn-bg: #fffbeb;
-    --pill-warn-ink: #92400e;
-    --pill-neutral-bg: var(--p-raised-light);
-    --pill-neutral-ink: var(--p-ink-light);
-    --grid: #e5e5e5;
-    --chart-span: 0.06;
-    color-scheme: light;
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    text-wrap: balance;
   }
 }
 
-@theme inline {
-  --color-ground: var(--ground);
-  --color-surface: var(--surface);
-  --color-raised: var(--raised);
-  --color-line: var(--border);
-  --color-rule: var(--rule);
-  --color-control: var(--control);
-  --color-text: var(--text);
-  --color-muted: var(--muted);
-  --color-faint: var(--faint);
-  --color-accent: var(--accent);
-  --color-accent-ink: var(--accent-ink);
-  --color-primary: var(--primary);
-  --color-primary-ink: var(--primary-ink);
-  --color-positive: var(--positive);
-  --color-negative: var(--negative);
-  --color-warning: var(--warning);
-  --color-pill-pos-bg: var(--pill-pos-bg);
-  --color-pill-pos-ink: var(--pill-pos-ink);
-  --color-pill-neg-bg: var(--pill-neg-bg);
-  --color-pill-neg-ink: var(--pill-neg-ink);
-  --color-pill-warn-bg: var(--pill-warn-bg);
-  --color-pill-warn-ink: var(--pill-warn-ink);
-  --color-pill-neutral-bg: var(--pill-neutral-bg);
-  --color-pill-neutral-ink: var(--pill-neutral-ink);
-  --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+@layer components {
+  /* Performance optimization for long conversation threads and session logs (>50 items) */
+  .vox-cv-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: 0 120px;
+  }
+
+  /* Tabular figures everywhere a counter or time updates */
+  .num,
+  time,
+  [data-num] {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
-* {
-  box-sizing: border-box;
-  scrollbar-width: thin;
-  scrollbar-color: var(--control) transparent;
-}
-
-*::-webkit-scrollbar { width: 6px; height: 6px; }
-*::-webkit-scrollbar-track { background: transparent; }
-*::-webkit-scrollbar-thumb { background: var(--control); border-radius: 3px; }
-
-html {
-  overscroll-behavior: none;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-}
-
-@media (pointer: coarse) {
-  html { overscroll-behavior-y: auto; }
-}
-
-body {
-  background: var(--ground);
-  color: var(--text);
-  font-family: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: var(--fs-body);
-  line-height: 1.5;
-  overflow-x: hidden;
-  overscroll-behavior-x: none;
-}
-
-::selection {
-  background: color-mix(in srgb, var(--accent) 28%, transparent);
-  color: var(--text);
-}
-
-/* A single visible focus treatment for every interactive element. */
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: var(--radius-chip);
-}
-
-h1, h2, h3, h4, h5, h6 {
-  text-wrap: balance;
-  font-weight: 600;
-}
-
-/* Section/meta labels: sentence case, readable size, one grey. */
-.label {
-  font-family: var(--font-inter), system-ui, sans-serif;
-  font-size: var(--fs-small);
-  font-weight: 500;
-  color: var(--muted);
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-/* Tabular figures everywhere a number updates. */
-.num, time, [data-num] { font-variant-numeric: tabular-nums; }
-
-/* Shell: one gutter, one ground, three zones on a 1px rule. */
-.app-shell {
-  position: relative;
-  display: grid;
-  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--rail-w);
-  min-height: 100dvh;
-}
-
-.app-main {
-  min-width: 0;
-  min-height: 0;
-  height: 100dvh;
-  display: flex;
-  flex-direction: column;
-}
-
-@media (max-width: 1180px) {
-  .app-shell { grid-template-columns: 208px minmax(0, 1fr) 268px; }
-}
-
-@media (max-width: 1023px) {
-  .app-shell { display: flex; flex-direction: column; }
-}
-
-/* Flat surfaces: a lightness step, optionally a 1px rule. Never both a
-   border and a shadow on a resting card. */
-.panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
-}
-
-.panel-raised { background: var(--raised); border-radius: var(--radius-chip); }
-
-/* The composer and overlays are the only floating surfaces.
-   taste-skill-ignore shadow — real floating overlay, not a resting card. */
-.float-shadow { box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24); }
-
-/* Loading placeholder: a flat grey bar at the real text size, no shimmer. */
-.skeleton { background: var(--raised); border-radius: var(--radius-chip); }
-
-/* Respect prefers-reduced-motion: kill decorative loops and travel. */
+/* Respect prefers-reduced-motion: neutralize decorative loops and motion */
 @media (prefers-reduced-motion: reduce) {
-  /* taste-skill-ignore bounce — this rule disables attention loops. */
-  .animate-pulse, .animate-ping { animation: none; }
-  *, *::before, *::after {
+  .animate-pulse,
+  .animate-ping,
+  .animate-spin {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;

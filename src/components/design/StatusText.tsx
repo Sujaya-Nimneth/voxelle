@@ -1,6 +1,11 @@
 'use client';
 
+import { Text } from '@astryxdesign/core/Text';
 import type { AssistantStatus } from '@/types/types';
+
+interface StatusTextProps {
+  status: AssistantStatus;
+}
 
 const LABELS: Record<AssistantStatus, string> = {
   idle: 'Ready',
@@ -9,25 +14,13 @@ const LABELS: Record<AssistantStatus, string> = {
   speaking: 'Speaking',
 };
 
-/**
- * Neutral, sentence-case status. The single small mark carries the accent;
- * no coloured pill per state, no pulsing dot farm.
- */
-export default function StatusText({
-  status,
-  className = '',
-}: {
-  status: AssistantStatus;
-  className?: string;
-}) {
+export default function StatusText({ status }: StatusTextProps) {
   return (
-    <span className={`inline-flex items-center gap-2 text-[12px] text-muted ${className}`} role="status">
-      <span
-        className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-        style={{ background: status === 'idle' ? 'var(--faint)' : 'var(--accent)' }}
-        aria-hidden="true"
-      />
+    <Text
+      type="label"
+      color={status === 'listening' || status === 'speaking' ? 'accent' : 'secondary'}
+    >
       {LABELS[status]}
-    </span>
+    </Text>
   );
 }

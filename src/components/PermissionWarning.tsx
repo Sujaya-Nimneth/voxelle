@@ -1,54 +1,63 @@
 'use client';
 
-import { motion } from 'framer-motion';
-import { AlertTriangle, X } from 'lucide-react';
+import { useState } from 'react';
+import { MicOff, Keyboard } from 'lucide-react';
+import { Banner } from '@astryxdesign/core/Banner';
+import { Button } from '@astryxdesign/core/Button';
 
-interface PermissionWarningProps {
-  error: string | null;
+export interface PermissionWarningProps {
+  sttError: string | null;
   sttSupported: boolean;
-  ttsSupported: boolean;
-  onDismiss: () => void;
+  onFocusComposer?: () => void;
 }
 
+/**
+ * Full-width AppShell banner surfacing microphone permission / browser
+ * speech-support state with an immediate typed-mode fallback action.
+ */
 export default function PermissionWarning({
-  error,
+  sttError,
   sttSupported,
-  ttsSupported,
-  onDismiss,
+  onFocusComposer,
 }: PermissionWarningProps) {
-  let message = error;
+  const [dismissedUnsupported, setDismissedUnsupported] = useState(false);
 
-  if (!sttSupported) {
-    message =
-      'Speech recognition is not available in this browser. For voice input, use Chrome, Edge, or Safari.';
-  } else if (!ttsSupported) {
-    message =
-      'Speech synthesis is not supported in this browser. Assistant responses will appear in text only.';
+  if (sttError) {
+    return (
+      <Banner
+        status="warning"
+        container="section"
+        icon={<MicOff size={18} aria-hidden="true" />}
+        title="Microphone unavailable"
+        description={`${sttError} You can continue typing or paste an image below.`}
+        isDismissable
+        endContent={
+          onFocusComposer ? (
+            <Button
+              label="Focus input"
+              size="sm"
+              variant="secondary"
+              onClick={onFocusComposer}
+            />
+          ) : undefined
+        }
+      />
+    );
   }
 
-  if (!message) return null;
+  if (!sttSupported && !dismissedUnsupported) {
+    return (
+      <Banner
+        status="info"
+        container="section"
+        icon={<Keyboard size={18} aria-hidden="true" />}
+        title="Typed input active"
+        description="Speech recognition is not supported in this browser. Type your request or attach an image below."
+        isDismissable
+        onDismiss={() => setDismissedUnsupported(true)}
+      />
+    );
+  }
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, height: 0 }}
-      animate={{ opacity: 1, height: 'auto' }}
-      exit={{ opacity: 0, height: 0 }}
-      className="px-5 sm:px-8 mt-2"
-      role="alert"
-    >
-      <div className="flex items-start gap-3 px-4 py-3 rounded-[var(--radius-card)] bg-pill-warn-bg text-pill-warn-ink">
-        <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
-        <div className="flex-1 min-w-0">
-          <p className="text-[12px] leading-relaxed">{message}</p>
-        </div>
-        <button
-          onClick={onDismiss}
-          className="p-1 rounded-[var(--radius-control)] hover:opacity-70 transition-opacity flex-shrink-0 cursor-pointer"
-          aria-label="Dismiss warning"
-        >
-          <X className="w-3.5 h-3.5" aria-hidden="true" />
-        </button>
-      </div>
-    </motion.div>
-  );
+  return null;
 }

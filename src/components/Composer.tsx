@@ -1,202 +1,290 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect, KeyboardEvent, memo } from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { ImagePlus, Mic, Send, Square } from 'lucide-react';
-import ImageDropzone from './ImageDropzone';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Image as ImageIcon,
+  ImagePlus,
+  Mic,
+  MicOff,
+  Square,
+  Volume2,
+  VolumeX,
+} from 'lucide-react';
+import { Button } from '@astryxdesign/core/Button';
+import {
+  ChatComposer,
+  ChatComposerDrawer,
+  ChatComposerInput,
+  ChatSendButton,
+  type ChatComposerInputHandle,
+} from '@astryxdesign/core/Chat';
+import { IconButton } from '@astryxdesign/core/IconButton';
+import { HStack, VStack } from '@astryxdesign/core/Stack';
+import { Text } from '@astryxdesign/core/Text';
+import { Token } from '@astryxdesign/core/Token';
 import type { AssistantStatus } from '@/types/types';
+import ImageDropzone, { validateAndReadImageFile } from './ImageDropzone';
 
-interface ComposerProps {
+export interface ComposerProps {
   status: AssistantStatus;
+  isListening: boolean;
   sttSupported: boolean;
+  interimTranscript?: string;
   uploadedImage: string | null;
-  /** Dropzone visibility is owned by the page (the empty state can open it). */
-  showDropzone: boolean;
-  onSetShowDropzone: (show: boolean) => void;
-  onSetUploadedImage: (image: string | null) => void;
+  onImageChange: (dataUrl: string | null) => void;
   onSendMessage: (text: string) => void;
   onToggleListening: () => void;
   onStopSpeaking: () => void;
+  autoSpeak: boolean;
+  onToggleAutoSpeak: () => void;
+  focusRequestCount?: number;
 }
 
-const MAX_TEXTAREA_HEIGHT = 160;
-
-function ComposerComponent({
+export function Composer({
   status,
+  isListening,
   sttSupported,
+  interimTranscript,
   uploadedImage,
-  showDropzone,
-  onSetShowDropzone,
-  onSetUploadedImage,
+  onImageChange,
   onSendMessage,
   onToggleListening,
   onStopSpeaking,
+  autoSpeak,
+  onToggleAutoSpeak,
+  focusRequestCount = 0,
 }: ComposerProps) {
-  const [textInput, setTextInput] = useState('');
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-  const prefersReducedMotion = useReducedMotion();
+  const [draft, setDraft] = useState('');
+  const [showDropzone, setShowDropzone] = useState(false);
+  const [fileError, setFileError] = useState('');
+  const [attachedFileName, setAttachedFileName] = useState<string>('Attached image');
+  const inputHandleRef = useRef<ChatComposerInputHandle | null>(null);
 
-  // Auto-grow the textarea with content, capped so long drafts scroll
-  // instead of pushing the chat log off-screen.
-  useEffect(() => {
-    const el = inputRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
-    el.style.overflowY = el.scrollHeight > MAX_TEXTAREA_HEIGHT ? 'auto' : 'hidden';
-  }, [textInput]);
+  const canSend = draft.trim().length > 0 || Boolean(uploadedImage);
 
-  // "/" focuses the composer when not already typing and no dialog is open.
+  // External focus trigger (e.g., PermissionWarning "Focus input" action)
   useEffect(() => {
-    const handleGlobalKeyDown = (e: globalThis.KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (focusRequestCount > 0) {
+      inputHandleRef.current?.focus();
+    }
+  }, [focusRequestCount]);
+
+  // Global `/` shortcut to focus composer input when not typing in another field
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
       if (
-        e.key === '/' &&
-        document.activeElement?.tagName !== 'INPUT' &&
-        document.activeElement?.tagName !== 'TEXTAREA' &&
-        !document.querySelector('[role="dialog"]')
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
       ) {
-        e.preventDefault();
-        inputRef.current?.focus();
+        return;
       }
+      e.preventDefault();
+      inputHandleRef.current?.focus();
     };
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const handleSend = useCallback(() => {
-    if (textInput.trim() || uploadedImage) {
-      onSendMessage(textInput);
-      setTextInput('');
-      onSetShowDropzone(false);
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
-  }, [textInput, uploadedImage, onSendMessage, onSetShowDropzone]);
-
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handleSend();
+  // Global image paste (⌘V / Ctrl+V) even when attachment drawer is closed
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          const pasted = item.getAsFile();
+          if (pasted) {
+            e.preventDefault();
+            validateAndReadImageFile(
+              pasted,
+              (url, validFile) => {
+                onImageChange(url);
+                setAttachedFileName(validFile.name || 'Pasted image');
+                setFileError('');
+              },
+              (err) => setFileError(err)
+            );
+            return;
+          }
+        }
       }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [onImageChange]);
+
+  const submitMessage = useCallback(
+    (rawValue?: string) => {
+      const text = (rawValue ?? draft).trim();
+      if (!text && !uploadedImage) return;
+      onSendMessage(text || 'Describe this image');
+      setDraft('');
+      setFileError('');
+      setShowDropzone(false);
     },
-    [handleSend]
+    [draft, uploadedImage, onSendMessage]
   );
 
-  const placeholder =
-    status === 'processing'
-      ? 'Thinking and running tools…'
-      : status === 'listening'
-      ? 'Listening to your voice…'
-      : 'Message Voxelle…';
+  const drawerOpen = showDropzone || Boolean(uploadedImage);
+
+  const drawerContent = drawerOpen ? (
+    <ChatComposerDrawer
+      count={uploadedImage ? 1 : undefined}
+      label={uploadedImage ? attachedFileName : 'Attach image'}
+    >
+      <VStack gap={2}>
+        {uploadedImage ? (
+          <HStack gap={2} align="center" wrap="wrap">
+            <Token
+              label={attachedFileName}
+              color="blue"
+              icon={<ImageIcon size={14} aria-hidden="true" />}
+              onRemove={() => {
+                onImageChange(null);
+                setAttachedFileName('Attached image');
+              }}
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element -- local base64 data URI preview cannot use next/image optimizer */}
+            <img
+              src={uploadedImage}
+              alt="Attached image preview"
+              className="max-h-20 w-auto rounded-[var(--radius-inner)] border border-[var(--color-border)] object-contain"
+            />
+          </HStack>
+        ) : null}
+
+        <ImageDropzone
+          image={uploadedImage}
+          isDropzoneVisible={showDropzone || !uploadedImage}
+          onFileError={setFileError}
+          onImageChange={(url, fileName) => {
+            onImageChange(url);
+            if (fileName) setAttachedFileName(fileName);
+            if (url) {
+              setShowDropzone(false);
+              setFileError('');
+            }
+          }}
+        />
+      </VStack>
+    </ChatComposerDrawer>
+  ) : undefined;
 
   return (
-    <div className="flex-shrink-0 px-4 sm:px-8 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
-      <AnimatePresence>
-        {showDropzone && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="mb-2.5 max-w-[760px] mx-auto"
-          >
-            <ImageDropzone
-              uploadedImage={uploadedImage}
-              onImageUpload={onSetUploadedImage}
-              onImageRemove={() => onSetUploadedImage(null)}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* The one floating surface: flat fill, 1px control outline. */}
-      <div className="max-w-[760px] mx-auto panel p-2 flex items-end gap-2 float-shadow focus-within:border-accent transition-colors">
-        <label htmlFor="composer-input" className="sr-only">Message Voxelle</label>
-
-        <button
-          type="button"
-          onClick={() => onSetShowDropzone(!showDropzone)}
-          className={`w-11 h-11 rounded-[var(--radius-control)] flex items-center justify-center transition-colors cursor-pointer flex-shrink-0 ${
-            uploadedImage || showDropzone
-              ? 'bg-raised text-accent'
-              : 'text-muted hover:text-text hover:bg-raised'
-          }`}
-          title="Attach an image (PNG, JPEG, WebP)"
-          aria-label="Attach image"
-          aria-pressed={showDropzone}
-        >
-          <ImagePlus className="w-4 h-4" aria-hidden="true" />
-        </button>
-
-        <textarea
-          ref={inputRef}
-          id="composer-input"
-          name="message"
-          rows={1}
-          value={textInput}
-          onChange={(e) => setTextInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          autoComplete="off"
-          aria-describedby="composer-hint"
-          className="flex-1 min-w-0 bg-transparent border-none outline-none resize-none text-[16px] leading-relaxed text-text placeholder:text-faint px-1 py-2.5 font-sans max-h-[160px]"
+    <ChatComposer
+      value={draft}
+      onChange={setDraft}
+      onSubmit={(val) => submitMessage(val)}
+      drawer={drawerContent}
+      status={fileError ? { type: 'error', message: fileError } : undefined}
+      headerContext={
+        isListening && interimTranscript ? (
+          <Text type="supporting" color="accent" maxLines={1}>
+            Hearing: {interimTranscript}
+          </Text>
+        ) : undefined
+      }
+      input={
+        <ChatComposerInput
+          handleRef={inputHandleRef}
+          label="Message Voxelle"
+          value={draft}
+          onChange={setDraft}
+          placeholder={
+            isListening
+              ? 'Listening… speak now or type to override'
+              : 'Ask Voxelle anything, drop an image, or press / to type…'
+          }
+          maxRows={6}
+          onFiles={(files) => {
+            const firstImage = files.find((f) => f.type.startsWith('image/'));
+            if (!firstImage) {
+              setFileError('Only image files can be attached.');
+              return;
+            }
+            validateAndReadImageFile(
+              firstImage,
+              (url, validFile) => {
+                onImageChange(url);
+                setAttachedFileName(validFile.name);
+                setFileError('');
+              },
+              (err) => setFileError(err)
+            );
+          }}
         />
-        <span id="composer-hint" className="sr-only">
-          Press Enter to send, Shift plus Enter for a new line, or press slash to focus.
-        </span>
-
-        {status === 'speaking' && (
-          <button
-            type="button"
-            onClick={onStopSpeaking}
-            className="h-11 px-2.5 rounded-[var(--radius-control)] text-[12px] text-muted bg-raised hover:text-text border border-line transition-colors cursor-pointer flex items-center gap-1.5 flex-shrink-0"
-            title="Silence speech audio"
-            aria-label="Mute assistant speech"
-          >
-            <Square className="w-3 h-3 fill-current" aria-hidden="true" />
-            <span className="hidden sm:inline">Mute</span>
-          </button>
-        )}
-
-        <button
-          id="mic-button"
-          type="button"
-          onClick={onToggleListening}
-          disabled={!sttSupported}
-          className={`w-11 h-11 rounded-[var(--radius-control)] border flex items-center justify-center cursor-pointer flex-shrink-0 transition-colors ${
-            status === 'listening'
-              ? 'border-accent bg-raised text-accent'
-              : 'border-line text-muted hover:text-text hover:bg-raised'
-          } disabled:opacity-40 disabled:cursor-not-allowed`}
-          title={status === 'listening' ? 'Stop listening' : 'Start voice input'}
-          aria-label={status === 'listening' ? 'Stop voice recording' : 'Start voice recording'}
-        >
-          {status === 'listening' ? (
-            <motion.span
-              animate={prefersReducedMotion ? undefined : { scale: [1, 1.15, 1] }}
-              transition={prefersReducedMotion ? { duration: 0 } : { duration: 1, repeat: Infinity }}
-              className="flex items-center justify-center"
-            >
-              <Mic className="w-4 h-4" aria-hidden="true" />
-            </motion.span>
-          ) : (
-            <Mic className="w-4 h-4" aria-hidden="true" />
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={handleSend}
-          disabled={!textInput.trim() && !uploadedImage}
-          className="w-11 h-11 rounded-[var(--radius-control)] bg-primary text-primary-ink flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 active:scale-[0.97] cursor-pointer flex-shrink-0"
-          title="Send message"
-          aria-label="Send message"
-        >
-          <Send className="w-4 h-4" aria-hidden="true" />
-        </button>
-      </div>
-    </div>
+      }
+      footerActions={
+        <HStack gap={1} align="center">
+          <IconButton
+            label={showDropzone ? 'Hide image dropzone' : 'Attach image'}
+            tooltip={showDropzone ? 'Hide attachment tray' : 'Attach or paste image'}
+            icon={<ImagePlus size={18} aria-hidden="true" />}
+            variant={uploadedImage || showDropzone ? 'secondary' : 'ghost'}
+            size="md"
+            onClick={() => setShowDropzone((v) => !v)}
+          />
+          <IconButton
+            label={autoSpeak ? 'Mute automatic voice replies' : 'Enable automatic voice replies'}
+            tooltip={autoSpeak ? 'Spoken replies on' : 'Spoken replies off'}
+            icon={
+              autoSpeak ? (
+                <Volume2 size={18} aria-hidden="true" />
+              ) : (
+                <VolumeX size={18} aria-hidden="true" />
+              )
+            }
+            variant="ghost"
+            size="md"
+            onClick={onToggleAutoSpeak}
+          />
+        </HStack>
+      }
+      sendActions={
+        <HStack gap={1} align="center">
+          {status === 'speaking' ? (
+            <Button
+              label="Mute"
+              icon={<Square size={14} aria-hidden="true" />}
+              variant="secondary"
+              size="md"
+              onClick={onStopSpeaking}
+            />
+          ) : null}
+          <IconButton
+            label={isListening ? 'Stop voice input' : 'Start voice input'}
+            tooltip={
+              !sttSupported
+                ? 'Voice input unavailable in this browser'
+                : isListening
+                  ? 'Stop listening'
+                  : 'Start voice input'
+            }
+            icon={
+              isListening ? (
+                <MicOff size={18} aria-hidden="true" />
+              ) : (
+                <Mic size={18} aria-hidden="true" />
+              )
+            }
+            variant={isListening ? 'primary' : 'secondary'}
+            size="md"
+            isDisabled={!sttSupported}
+            onClick={onToggleListening}
+          />
+        </HStack>
+      }
+      sendButton={
+        <ChatSendButton
+          isDisabled={!canSend}
+          onSend={() => submitMessage()}
+        />
+      }
+    />
   );
 }
-
-export const Composer = memo(ComposerComponent);
