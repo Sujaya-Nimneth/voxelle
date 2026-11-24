@@ -103,4 +103,22 @@ describe('readChatStream', () => {
     });
     assert.ok(received && received.length > 0);
   });
+
+  test('flushes a final buffered event even without a trailing newline', async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('{"type":"delta","text":"hi"}\n{"type":"done","finishReason":"STOP"}'));
+        controller.close();
+      },
+    });
+    let text = '';
+    const result = await readChatStream(stream, {
+      onDelta: (t) => {
+        text += t;
+      },
+    });
+    assert.strictEqual(text, 'hi');
+    assert.deepStrictEqual(result, { done: true, finishReason: 'STOP' });
+  });
 });

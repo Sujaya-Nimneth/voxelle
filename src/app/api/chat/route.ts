@@ -1,7 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMockResponse, toolDefinitions, formatToolNarrative } from '@/lib/tools';
+import {
+  getMockResponse,
+  toolDefinitions,
+  toGeminiToolDeclarations,
+  formatToolNarrative,
+} from '@/lib/tools';
 import { sanitizeMessages } from './messageSanitizer';
 import { executeToolCall, type ToolExecutionResult } from '@/lib/toolExecutors';
+import {
+  buildSystemPrompt,
+  coalesceGeminiModelParts,
+  extractGeminiParts,
+  toGeminiContents,
+  validateTimeZone,
+  type GeminiContent,
+  type GeminiPart,
+  type GeminiTurnItem,
+  type RawGeminiCandidate,
+} from '@/lib/providerHelpers';
 import type { Message, ToolCall, ChatStreamEvent } from '@/types/types';
 
 // ─── Configuration ───
@@ -57,7 +73,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    const { messages, image } = body;
+    const { messages, image, timeZone: rawTimeZone } = body;
+    const timeZone = validateTimeZone(rawTimeZone);
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json(
@@ -109,12 +126,12 @@ export async function POST(request: NextRequest) {
         if (!GEMINI_API_KEY) {
           warnOnce('gemini-key', 'GEMINI_API_KEY is not configured. Falling back to mock engine.');
           return streamNdjson(
-            streamMock(sanitizedMessages, true, 'Gemini API key not configured'),
+            streamMock(sanitizedMessages, true, 'Gemini API key not configured', timeZone),
             request.signal
           );
         }
         return streamNdjson(
-          streamGemini(sanitizedMessages, validatedImage, request.signal),
+          streamGemini(sanitizedMessages, validatedImage, request.signal, timeZone),
           request.signal
         );
 
@@ -122,13 +139,14 @@ export async function POST(request: NextRequest) {
         if (!GROQ_API_KEY) {
           warnOnce('groq-key', 'GROQ_API_KEY is not configured. Falling back to mock engine.');
           return streamNdjson(
-            streamMock(sanitizedMessages, true, 'Groq API key not configured'),
+            streamMock(sanitizedMessages, true, 'Groq API key not configured', timeZone),
             request.signal
           );
         }
         return streamNdjson(
           streamGroq(sanitizedMessages, request.signal, {
             droppedImage: validatedImage !== undefined,
+            timeZone,
           }),
           request.signal
         );
@@ -136,7 +154,7 @@ export async function POST(request: NextRequest) {
 
       case 'mock':
       default:
-        return streamNdjson(streamMock(sanitizedMessages, false), request.signal);
+        return streamNdjson(streamMock(sanitizedMessages, false, undefined, timeZone), request.signal);
     }
   } catch (error) {
     console.error('Chat API unexpected error:', error);
@@ -264,11 +282,12 @@ interface ExecutedTool {
 // runs so callers can feed the same outcomes into the round-trip.
 async function* emitToolExecution(
   toolCalls: ToolCall[],
-  executedOut: ExecutedTool[]
+  executedOut: ExecutedTool[],
+  timeZone?: string
 ): AsyncGenerator<ChatStreamEvent> {
   for (const call of toolCalls) {
     yield { type: 'tool', toolCall: { ...call, status: 'executing' } };
-    const result = executeToolCall(call);
+    const result = executeToolCall(call, { timeZone });
     executedOut.push({ call, result });
     yield {
       type: 'tool_result',
@@ -286,7 +305,8 @@ async function* emitToolExecution(
 async function* streamMock(
   messages: Message[],
   degraded: boolean,
-  degradedReason?: string
+  degradedReason?: string,
+  timeZone?: string
 ): AsyncGenerator<ChatStreamEvent> {
   const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user');
 
@@ -299,16 +319,22 @@ async function* streamMock(
 
   yield { type: 'meta', provider: 'mock', model: 'demo engine', degraded, reason: degradedReason };
 
+  const executed: ExecutedTool[] = [];
   if (result.toolCalls) {
     // Demo mode runs the same server-side executors as live providers — the
-    // .ics download in the demo is the real artifact.
-    for await (const event of emitToolExecution(result.toolCalls, [])) {
+    // .ics download, math evaluation, and world clock in demo mode are real.
+    for await (const event of emitToolExecution(result.toolCalls, executed, timeZone)) {
       yield event;
     }
   }
 
+  const responseText =
+    result.response ||
+    executed.map((e) => e.result.message).join(' ') ||
+    "I'm ready when you are.";
+
   // Stream in small word groups so demo mode feels like live generation
-  const words = result.response.split(' ');
+  const words = responseText.split(' ');
   for (let i = 0; i < words.length; i += 3) {
     const isLastGroup = i + 3 >= words.length;
     yield {
@@ -332,66 +358,30 @@ class ProviderHttpError extends Error {
   }
 }
 
-type GeminiPart =
-  | { text: string }
-  | { inline_data: { mime_type: string; data: string } }
-  | { functionCall: GeminiFunctionCall }
-  | { functionResponse: { name: string; response: { result: string } } };
-type GeminiFunctionCall = { name: string; args?: unknown };
-
-// Normalized items from one Gemini streaming turn.
-interface GeminiTurnItem {
-  text?: string;
-  functionCall?: GeminiFunctionCall;
-  finishReason?: string;
-}
-
 const GEMINI_SYSTEM_INSTRUCTION = `You are Voxelle, a helpful voice-enabled multimodal AI assistant and ambient co-pilot. You can:
 1. Have natural, concise conversations suited for voice synthesis.
 2. Schedule calendar events using the add_calendar_event tool.
-3. Control smart home devices using the toggle_smart_home_device tool.
-4. Analyze images when provided.
+3. Control smart home devices using the toggle_smart_home_device tool (always mention it is simulated if no hub is connected).
+4. Evaluate math with calculate_expression and check world times with get_world_time.
+5. Analyze images when provided.
 
 Keep your responses natural, conversational, and direct since they may be spoken aloud.`;
-
-function toGeminiContents(messages: Message[], image?: string): Array<{ role: string; parts: GeminiPart[] }> {
-  const contents = messages.map((m) => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: m.content ? [{ text: m.content } as GeminiPart] : [],
-  }));
-
-  // Attach image to the most recent user turn
-  if (image && contents.length > 0) {
-    const lastMsg = contents[contents.length - 1];
-    if (lastMsg.role === 'user') {
-      const match = image.match(/^data:([^;]+);base64,(.+)$/);
-      if (match) {
-        lastMsg.parts.push({
-          inline_data: {
-            mime_type: match[1],
-            data: match[2],
-          },
-        });
-      }
-    }
-  }
-  return contents;
-}
 
 // One streaming turn against Gemini. Throws ProviderHttpError before any
 // output when the request itself fails, so callers can fall back cleanly.
 async function* geminiTurn(
-  contents: Array<{ role: string; parts: GeminiPart[] }>,
+  contents: GeminiContent[],
   signal: AbortSignal,
-  includeTools: boolean
+  includeTools: boolean,
+  timeZone?: string
 ): AsyncGenerator<GeminiTurnItem> {
   const geminiBody: Record<string, unknown> = {
     contents,
-    system_instruction: { parts: [{ text: GEMINI_SYSTEM_INSTRUCTION }] },
+    system_instruction: { parts: [{ text: buildSystemPrompt(GEMINI_SYSTEM_INSTRUCTION, timeZone) }] },
     generationConfig: { temperature: 0.7, topP: 0.95, maxOutputTokens: 512 },
   };
   if (includeTools) {
-    geminiBody.tools = [{ function_declarations: toolDefinitions }];
+    geminiBody.tools = [{ function_declarations: toGeminiToolDeclarations() }];
   }
 
   const res = await fetch(
@@ -415,10 +405,7 @@ async function* geminiTurn(
 
   for await (const payload of parseSse(res.body)) {
     let chunk: {
-      candidates?: Array<{
-        finishReason?: string;
-        content?: { parts?: Array<{ text?: string; functionCall?: GeminiFunctionCall }> };
-      }>;
+      candidates?: RawGeminiCandidate[];
     };
     try {
       chunk = JSON.parse(payload);
@@ -427,22 +414,17 @@ async function* geminiTurn(
     }
 
     const candidate = chunk.candidates?.[0];
-    const item: GeminiTurnItem = {};
-    if (candidate?.finishReason) item.finishReason = candidate.finishReason;
-    const parts = candidate?.content?.parts;
-    if (Array.isArray(parts) && parts.length > 0) {
-      const part = parts[0];
-      if (typeof part.text === 'string' && part.text) item.text = part.text;
-      else if (part.functionCall) item.functionCall = part.functionCall;
+    for (const item of extractGeminiParts(candidate)) {
+      yield item;
     }
-    if (item.text || item.functionCall || item.finishReason) yield item;
   }
 }
 
 async function* streamGemini(
   messages: Message[],
   image: string | undefined,
-  requestSignal: AbortSignal
+  requestSignal: AbortSignal,
+  timeZone?: string
 ): AsyncGenerator<ChatStreamEvent> {
   // One budget across both the initial turn and the tool round-trip so a
   // chatty agentic exchange can't double the function runtime.
@@ -459,7 +441,7 @@ async function* streamGemini(
 
     yield { type: 'meta', provider: 'gemini', model: GEMINI_MODEL, degraded: false };
 
-    for await (const item of geminiTurn(contents, signal(), true)) {
+    for await (const item of geminiTurn(contents, signal(), true, timeZone)) {
       if (item.finishReason) finishReason = item.finishReason;
       if (item.text) {
         hasText = true;
@@ -479,7 +461,7 @@ async function* streamGemini(
     if (toolCalls.length > 0) {
       // Execute server-side and report real outcomes.
       const executed: ExecutedTool[] = [];
-      for await (const event of emitToolExecution(toolCalls, executed)) {
+      for await (const event of emitToolExecution(toolCalls, executed, timeZone)) {
         yield event;
       }
 
@@ -487,9 +469,9 @@ async function* streamGemini(
       // grounded reply instead of the client inventing one. Tools are
       // withheld on this turn — exactly one round-trip, bounded latency.
       try {
-        const roundTripContents = [
+        const roundTripContents: GeminiContent[] = [
           ...contents,
-          { role: 'model', parts: modelParts },
+          { role: 'model', parts: coalesceGeminiModelParts(modelParts) },
           {
             role: 'user',
             parts: executed.map(({ call, result }) => ({
@@ -500,7 +482,7 @@ async function* streamGemini(
             })),
           },
         ];
-        for await (const item of geminiTurn(roundTripContents, signal(), false)) {
+        for await (const item of geminiTurn(roundTripContents, signal(), false, timeZone)) {
           if (item.finishReason) finishReason = item.finishReason;
           if (item.text) {
             hasText = true;
@@ -508,8 +490,9 @@ async function* streamGemini(
           }
         }
       } catch (err) {
-        if (requestSignal.aborted || deadline.aborted) return;
+        if (requestSignal.aborted) return;
         console.error('Gemini tool round-trip failed:', err);
+        if (deadline.aborted) finishReason = 'MAX_TOKENS';
         // The tool DID run — fall through to the narrative below.
       }
 
@@ -522,7 +505,7 @@ async function* streamGemini(
   } catch (err) {
     if (requestSignal.aborted) return; // client left; nothing to report
     if (err instanceof ProviderHttpError) {
-      yield* streamMock(messages, true, `Gemini error (HTTP ${err.status})`);
+      yield* streamMock(messages, true, `Gemini error (HTTP ${err.status})`, timeZone);
       return;
     }
     console.error('Gemini stream exception:', err);
@@ -543,7 +526,7 @@ interface GroqTurnItem {
 }
 
 const GROQ_SYSTEM_PROMPT =
-  'You are Voxelle, a helpful voice-enabled AI assistant and ambient co-pilot. Keep responses concise and conversational since they are spoken aloud.';
+  'You are Voxelle, a helpful voice-enabled AI assistant and ambient co-pilot. You can schedule calendar events (add_calendar_event), simulate smart-home controls (toggle_smart_home_device), evaluate arithmetic (calculate_expression), and check world times (get_world_time). Keep responses concise and conversational since they are spoken aloud.';
 
 async function* groqTurn(
   messages: Array<Record<string, unknown>>,
@@ -610,42 +593,46 @@ async function* groqTurn(
     }
 
     const choice = chunk.choices?.[0];
-    const item: GroqTurnItem = {};
-    if (choice?.finish_reason) {
-      item.finishReason =
-        choice.finish_reason === 'length'
-          ? 'MAX_TOKENS'
-          : choice.finish_reason === 'tool_calls'
-            ? 'TOOL_CALLS'
-            : 'STOP';
+    const finishReason = choice?.finish_reason
+      ? choice.finish_reason === 'length'
+        ? 'MAX_TOKENS'
+        : choice.finish_reason === 'tool_calls'
+          ? 'TOOL_CALLS'
+          : 'STOP'
+      : undefined;
+
+    if (choice?.delta?.content) {
+      yield { text: choice.delta.content };
     }
-    if (choice?.delta?.content) item.text = choice.delta.content;
     if (choice?.delta?.tool_calls?.length) {
-      // Only the first tool call per delta matters for our single-tool flows;
-      // fragments arrive split across chunks with a stable index.
-      const tc = choice.delta.tool_calls[0];
-      item.toolCallDelta = {
-        index: tc.index,
-        id: tc.id,
-        name: tc.function?.name,
-        args: tc.function?.arguments,
-      };
+      for (const tc of choice.delta.tool_calls) {
+        yield {
+          toolCallDelta: {
+            index: tc.index,
+            id: tc.id,
+            name: tc.function?.name,
+            args: tc.function?.arguments,
+          },
+        };
+      }
     }
-    if (item.text || item.toolCallDelta || item.finishReason) yield item;
+    if (finishReason) {
+      yield { finishReason };
+    }
   }
 }
 
 async function* streamGroq(
   messages: Message[],
   requestSignal: AbortSignal,
-  options?: { droppedImage?: boolean }
+  options?: { droppedImage?: boolean; timeZone?: string }
 ): AsyncGenerator<ChatStreamEvent> {
   const deadline = AbortSignal.timeout(30_000);
   const signal = () => AbortSignal.any([requestSignal, deadline]);
 
   try {
     const baseMessages: Array<Record<string, unknown>> = [
-      { role: 'system', content: GROQ_SYSTEM_PROMPT },
+      { role: 'system', content: buildSystemPrompt(GROQ_SYSTEM_PROMPT, options?.timeZone) },
       ...messages.map((m) => ({
         role: m.role,
         // Groq's text models require non-empty content; image-only turns get a
@@ -706,7 +693,7 @@ async function* streamGroq(
 
       // Execute server-side and report real outcomes.
       const executed: ExecutedTool[] = [];
-      for await (const event of emitToolExecution(toolCalls, executed)) {
+      for await (const event of emitToolExecution(toolCalls, executed, options?.timeZone)) {
         yield event;
       }
 
@@ -739,8 +726,9 @@ async function* streamGroq(
           }
         }
       } catch (err) {
-        if (requestSignal.aborted || deadline.aborted) return;
+        if (requestSignal.aborted) return;
         console.error('Groq tool round-trip failed:', err);
+        if (deadline.aborted) finishReason = 'MAX_TOKENS';
         // The tool DID run — fall through to the narrative below.
       }
 
@@ -753,7 +741,7 @@ async function* streamGroq(
   } catch (err) {
     if (requestSignal.aborted) return; // client left; nothing to report
     if (err instanceof ProviderHttpError) {
-      yield* streamMock(messages, true, `Groq error (HTTP ${err.status})`);
+      yield* streamMock(messages, true, `Groq error (HTTP ${err.status})`, options?.timeZone);
       return;
     }
     console.error('Groq stream exception:', err);

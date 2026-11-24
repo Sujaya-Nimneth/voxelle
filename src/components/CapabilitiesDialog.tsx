@@ -1,6 +1,6 @@
 'use client';
 
-import { Calendar, Image as ImageIcon, Lightbulb, Mic, Play } from 'lucide-react';
+import { Calculator, Calendar, Clock, Image as ImageIcon, Lightbulb, Mic, Play } from 'lucide-react';
 import { Badge } from '@astryxdesign/core/Badge';
 import { Button } from '@astryxdesign/core/Button';
 import { Card } from '@astryxdesign/core/Card';
@@ -25,7 +25,7 @@ const TOOL_UI_META: Record<
   {
     title: string;
     badge: string;
-    variant: 'info' | 'warning';
+    variant: 'info' | 'warning' | 'neutral';
     samplePrompt: string;
     Icon: typeof Calendar;
   }
@@ -34,15 +34,29 @@ const TOOL_UI_META: Record<
     title: 'Calendar invite (.ics)',
     badge: 'Downloads .ics',
     variant: 'info',
-    samplePrompt: 'Schedule a project review tomorrow at 2:00 PM',
+    samplePrompt: 'Schedule a team sync tomorrow at 10:00 AM for 30 minutes',
     Icon: Calendar,
   },
   toggle_smart_home_device: {
     title: 'Smart home control',
     badge: 'Simulated',
     variant: 'warning',
-    samplePrompt: 'Turn on the living room lights',
+    samplePrompt: 'Set the living room lights to 40%',
     Icon: Lightbulb,
+  },
+  calculate_expression: {
+    title: 'Calculator',
+    badge: 'Server math',
+    variant: 'neutral',
+    samplePrompt: 'Calculate 128.40 * 1.18 / 4',
+    Icon: Calculator,
+  },
+  get_world_time: {
+    title: 'World clock',
+    badge: 'Live Intl',
+    variant: 'info',
+    samplePrompt: 'What time is it right now in Tokyo and London?',
+    Icon: Clock,
   },
 };
 

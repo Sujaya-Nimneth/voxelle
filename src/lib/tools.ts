@@ -1,26 +1,46 @@
 import type { ToolCall } from '@/types/types';
 
-// ─── Tool Definitions (compatible with Gemini & OpenAI function calling formats) ───
+// ─── Tool Definitions (standard JSON Schema, with Gemini REST uppercasing helper) ───
 
-export const toolDefinitions = [
+export interface ToolSchemaProperty {
+  type: 'string' | 'number' | 'boolean' | 'object' | 'array';
+  description: string;
+  enum?: string[];
+}
+
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  parameters: {
+    type: 'object';
+    properties: Record<string, ToolSchemaProperty>;
+    required: string[];
+  };
+}
+
+export const toolDefinitions: ToolDefinition[] = [
   {
     name: 'add_calendar_event',
     description:
       'Adds a new event to the user\'s calendar. Use this when the user asks to schedule, book, or add a meeting, appointment, reminder, or any calendar event.',
     parameters: {
-      type: 'OBJECT',
+      type: 'object',
       properties: {
         title: {
-          type: 'STRING',
+          type: 'string',
           description: 'The title or name of the event',
         },
         time: {
-          type: 'STRING',
+          type: 'string',
           description: 'The time of the event (e.g. "3:00 PM", "14:30", "2:00 PM")',
         },
         date: {
-          type: 'STRING',
+          type: 'string',
           description: 'The date of the event (e.g. "today", "tomorrow", "this afternoon", "2026-09-18")',
+        },
+        duration_minutes: {
+          type: 'number',
+          description: 'Optional duration of the event in minutes (defaults to 60)',
         },
       },
       required: ['title', 'time', 'date'],
@@ -29,24 +49,76 @@ export const toolDefinitions = [
   {
     name: 'toggle_smart_home_device',
     description:
-      'Turns a smart home device on or off. Use this when the user asks to control, turn on, turn off, enable, or disable a home device like lights, thermostat, fan, TV, etc.',
+      'Turns a smart home device on or off or adjusts its setting. Use this when the user asks to control, turn on, turn off, dim, enable, or disable a home device like lights, thermostat, fan, TV, etc.',
     parameters: {
-      type: 'OBJECT',
+      type: 'object',
       properties: {
         device_name: {
-          type: 'STRING',
+          type: 'string',
           description: 'The name of the device to control (e.g. "living room lights", "thermostat", "studio focus lights")',
         },
         state: {
-          type: 'STRING',
+          type: 'string',
           enum: ['on', 'off'],
           description: 'Whether to turn the device on or off',
+        },
+        setting: {
+          type: 'string',
+          description: 'Optional level, brightness, or temperature setting (e.g. "40%", "71°F")',
         },
       },
       required: ['device_name', 'state'],
     },
   },
+  {
+    name: 'calculate_expression',
+    description:
+      'Evaluates a basic arithmetic expression (+, -, *, /, %, parentheses) and returns the exact result.',
+    parameters: {
+      type: 'object',
+      properties: {
+        expression: {
+          type: 'string',
+          description: 'The arithmetic expression to evaluate (e.g. "128.40 * 1.18 / 4")',
+        },
+      },
+      required: ['expression'],
+    },
+  },
+  {
+    name: 'get_world_time',
+    description:
+      'Checks the current local time and day for one or more cities or IANA time zones.',
+    parameters: {
+      type: 'object',
+      properties: {
+        locations: {
+          type: 'string',
+          description: 'Comma-separated city names or IANA time zones (e.g. "Tokyo, London")',
+        },
+      },
+      required: ['locations'],
+    },
+  },
 ];
+
+/** Gemini REST v1beta expects uppercase schema types (OBJECT, STRING, NUMBER). */
+export function toGeminiToolDeclarations(defs: ToolDefinition[] = toolDefinitions) {
+  return defs.map((td) => ({
+    name: td.name,
+    description: td.description,
+    parameters: {
+      type: td.parameters.type.toUpperCase(),
+      properties: Object.fromEntries(
+        Object.entries(td.parameters.properties).map(([key, prop]) => [
+          key,
+          { ...prop, type: prop.type.toUpperCase() },
+        ])
+      ),
+      required: td.parameters.required,
+    },
+  }));
+}
 
 // ─── Tool Result Formatting (single source for server + client) ───
 
@@ -64,8 +136,17 @@ export function formatToolResult(toolCall: ToolCall): string {
       return `Scheduled "${arg(title, 'untitled event')}" for ${arg(date, 'unspecified date')} at ${arg(time, 'unspecified time')}.`;
     }
     case 'toggle_smart_home_device': {
-      const { device_name, state } = toolCall.arguments;
-      return `${arg(device_name, 'Device')} has been set to ${arg(state, 'the requested state')}.`;
+      const { device_name, state, setting } = toolCall.arguments;
+      const suffix = setting !== undefined && setting !== '' ? ` (${setting})` : '';
+      return `${arg(device_name, 'Device')} has been set to ${arg(state, 'the requested state')}${suffix}.`;
+    }
+    case 'calculate_expression': {
+      const { expression } = toolCall.arguments;
+      return `Calculated ${arg(expression, 'expression')}.`;
+    }
+    case 'get_world_time': {
+      const { locations } = toolCall.arguments;
+      return `Checked current time for ${arg(locations, 'requested locations')}.`;
     }
     default:
       return `Executed ${toolCall.name}`;
@@ -79,7 +160,15 @@ export function formatToolNarrative(toolCall: ToolCall): string {
     return `I've scheduled "${arg(toolCall.arguments.title, 'an event')}" for ${arg(toolCall.arguments.date, 'an unspecified date')} at ${arg(toolCall.arguments.time, 'an unspecified time')}.`;
   }
   if (toolCall.name === 'toggle_smart_home_device') {
-    return `I've turned ${arg(toolCall.arguments.state, 'on')} the ${arg(toolCall.arguments.device_name, 'device')}.`;
+    const setting = toolCall.arguments.setting;
+    const suffix = setting !== undefined && setting !== '' ? ` (${setting})` : '';
+    return `I've turned ${arg(toolCall.arguments.state, 'on')} the ${arg(toolCall.arguments.device_name, 'device')}${suffix}.`;
+  }
+  if (toolCall.name === 'calculate_expression') {
+    return `I've calculated ${arg(toolCall.arguments.expression, 'the expression')}.`;
+  }
+  if (toolCall.name === 'get_world_time') {
+    return `Here is the current time for ${arg(toolCall.arguments.locations, 'those locations')}.`;
   }
   return `I've executed ${toolCall.name.replace(/_/g, ' ')}.`;
 }
@@ -198,18 +287,157 @@ const genericResponses = [
   "I'm monitoring your workspace signals. Let me know if you'd like to schedule events or adjust your connected environment.",
 ];
 
+function extractScheduleArgs(userMessage: string): ToolCall['arguments'] {
+  const lower = userMessage.toLowerCase();
+
+  let date = 'Tomorrow';
+  const isoMatch = userMessage.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+  if (isoMatch) date = isoMatch[1];
+  else if (lower.includes('this afternoon')) date = 'This afternoon';
+  else if (lower.includes('tonight') || lower.includes('this evening')) date = 'Today';
+  else if (lower.includes('today')) date = 'Today';
+  else if (lower.includes('tomorrow')) date = 'Tomorrow';
+
+  const timeMatch = userMessage.match(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.))\b/i)
+    ?? userMessage.match(/\bat\s+(\d{1,2}:\d{2})\b/i);
+  const time = timeMatch ? timeMatch[1].trim() : '3:00 PM';
+
+  const durMatch = userMessage.match(/\b(\d{1,3})\s*(?:-|\s)?(?:min|mins|minute|minutes)\b/i);
+  const duration_minutes = durMatch ? Number(durMatch[1]) : undefined;
+
+  let title = 'Project Synchronization';
+  const quoted = userMessage.match(/["“]([^"”]+)["”]/);
+  if (quoted?.[1]) {
+    title = quoted[1].trim();
+  } else {
+    const cleaned = userMessage
+      .replace(/^(?:please\s+)?(?:schedule|book|add|create|set up|draft)\s+(?:a|an|the)?\s*/i, '')
+      .replace(/\b(?:today|tomorrow|this afternoon|tonight|this evening)\b/gi, '')
+      .replace(/\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)?/gi, '')
+      .replace(/\bfor\s+\d{1,3}\s*(?:-|\s)?(?:min|mins|minute|minutes)\b/gi, '')
+      .replace(/\b\d{4}-\d{2}-\d{2}\b/g, '')
+      .replace(/\s+/g, ' ')
+      .replace(/^[\s,.:-]+|[\s,.:-]+$/g, '');
+    if (cleaned.length >= 2 && cleaned.length <= 64) {
+      title = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    }
+  }
+
+  return {
+    title,
+    time,
+    date,
+    ...(duration_minutes ? { duration_minutes } : {}),
+  };
+}
+
+function extractMathExpression(userMessage: string): string | null {
+  const lower = userMessage.toLowerCase().trim();
+  const hasMathCue =
+    /\b(calculate|compute|evaluate|math|split|tip)\b/.test(lower) ||
+    /^\s*[\d($]/.test(userMessage);
+  const exprMatch = userMessage.match(/([0-9($][0-9.,$+\-*/%()\s]*[0-9)])/);
+  if (!hasMathCue || !exprMatch) return null;
+  const candidate = exprMatch[1].trim();
+  if (!/[+\-*/%]/.test(candidate)) return null;
+  return candidate;
+}
+
+function extractWorldTimeLocations(userMessage: string): string | null {
+  const lower = userMessage.toLowerCase();
+  if (!/\b(time|clock)\b/.test(lower) || /\bschedule|meeting|calendar|appointment\b/.test(lower)) {
+    return null;
+  }
+  const inMatch = userMessage.match(/\bin\s+([^?.!]+)/i);
+  if (inMatch?.[1]) {
+    return inMatch[1].trim();
+  }
+  return null;
+}
+
+function extractSmartHomeArgs(userMessage: string): ToolCall['arguments'] {
+  const lower = userMessage.toLowerCase();
+  const state: 'on' | 'off' = /\b(turn\s+off|switch\s+off|shut\s+off|disable|off)\b/.test(lower)
+    ? 'off'
+    : 'on';
+
+  const settingMatch = userMessage.match(/\b(\d{1,3}\s*%|(?:\d{2,3}\s*°?\s*[fc]))(?=\s|$|[.,!?])/i);
+  const setting = settingMatch ? settingMatch[1].replace(/\s+/g, '') : undefined;
+
+  let device_name = 'Living Room Lights';
+  if (lower.includes('thermostat') || lower.includes('ac') || lower.includes('temperature') || lower.includes('heater')) {
+    device_name = 'Workspace Thermostat';
+  } else if (lower.includes('fan')) {
+    device_name = 'Workspace Fan';
+  } else if (lower.includes('desk lamp')) {
+    device_name = 'Desk Lamp';
+  } else if (lower.includes('studio')) {
+    device_name = 'Studio Focus Lights';
+  }
+
+  return {
+    device_name,
+    state,
+    ...(setting ? { setting } : {}),
+  };
+}
+
 export function getMockResponse(userMessage: string): {
   response: string;
   toolCalls?: ToolCall[];
 } {
   const lowerMessage = userMessage.toLowerCase().trim();
 
+  const mathExpr = extractMathExpression(userMessage);
+  if (mathExpr) {
+    return {
+      response: '',
+      toolCalls: [
+        {
+          id: `tool_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+          name: 'calculate_expression',
+          arguments: { expression: mathExpr },
+          status: 'executing',
+        },
+      ],
+    };
+  }
+
+  const worldLocations = extractWorldTimeLocations(userMessage);
+  if (worldLocations) {
+    return {
+      response: '',
+      toolCalls: [
+        {
+          id: `tool_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+          name: 'get_world_time',
+          arguments: { locations: worldLocations },
+          status: 'executing',
+        },
+      ],
+    };
+  }
+
   for (const scenario of mockScenarios) {
     if (scenario.keywords.some((kw) => lowerMessage.includes(kw))) {
-      const toolCalls: ToolCall[] | undefined = scenario.toolCall
+      let toolCallSpec = scenario.toolCall;
+      let responseText = scenario.response;
+
+      if (scenario.toolCall?.name === 'add_calendar_event' && scenario.keywords.includes('schedule')) {
+        const dynamicArgs = extractScheduleArgs(userMessage);
+        toolCallSpec = { name: 'add_calendar_event', arguments: dynamicArgs };
+        responseText = `I've scheduled "${dynamicArgs.title}" for ${dynamicArgs.date} at ${dynamicArgs.time}. Download the .ics invite below to add it to your calendar.`;
+      } else if (scenario.toolCall?.name === 'toggle_smart_home_device' && scenario.keywords.includes('light')) {
+        const dynamicArgs = extractSmartHomeArgs(userMessage);
+        toolCallSpec = { name: 'toggle_smart_home_device', arguments: dynamicArgs };
+        const settingPart = dynamicArgs.setting ? ` (${dynamicArgs.setting})` : '';
+        responseText = `Simulated: ${dynamicArgs.device_name} set to ${dynamicArgs.state}${settingPart}. No physical hub is connected.`;
+      }
+
+      const toolCalls: ToolCall[] | undefined = toolCallSpec
         ? [
             {
-              ...scenario.toolCall,
+              ...toolCallSpec,
               id: `tool_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
               status: 'executing' as const,
             },
@@ -217,7 +445,7 @@ export function getMockResponse(userMessage: string): {
         : undefined;
 
       return {
-        response: scenario.response,
+        response: responseText,
         toolCalls,
       };
     }

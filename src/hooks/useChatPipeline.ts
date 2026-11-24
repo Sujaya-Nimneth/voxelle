@@ -169,12 +169,18 @@ export function useChatPipeline({
         const requestStart = Date.now();
         let firstTokenAt: number | null = null;
 
+        const timeZone =
+          typeof Intl !== 'undefined'
+            ? Intl.DateTimeFormat().resolvedOptions().timeZone
+            : undefined;
+
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: historyForApi,
             image: userMessage.image,
+            timeZone,
           }),
           signal: controller.signal,
         });

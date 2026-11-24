@@ -92,4 +92,79 @@ describe('ics time and date parsing', () => {
     );
     assert.ok(ics.includes('SUMMARY:Ops\\, sync\\; review'));
   });
+
+  test('respects custom durationMinutes and timezone TZID in .ics output', () => {
+    // 2026-10-24T20:00:00Z = 16:00 in America/New_York (EDT)
+    const now = new Date('2026-10-24T20:00:00Z');
+    const ics = buildIcsCalendar(
+      {
+        title: 'Team sync',
+        date: 'tomorrow',
+        time: '10:00 AM',
+        durationMinutes: 30,
+        timeZone: 'America/New_York',
+      },
+      now
+    );
+    assert.ok(ics.includes('DTSTART;TZID=America/New_York:20261025T100000'));
+    assert.ok(ics.includes('DTEND;TZID=America/New_York:20261025T103000'));
+  });
+
+  test('timezone-aware past-time rollover uses the client timezone wall clock', () => {
+    // 2026-10-24T19:00:00Z = 00:30 on Oct 25 in Asia/Colombo (+05:30)
+    const now = new Date('2026-10-24T19:00:00Z');
+    const ics = buildIcsCalendar(
+      {
+        title: 'Colombo Morning',
+        date: 'today',
+        time: '9:00 AM',
+        timeZone: 'Asia/Colombo',
+      },
+      now
+    );
+    assert.ok(ics.includes('DTSTART;TZID=Asia/Colombo:20261025T090000'));
+  });
+});
+
+describe('calculate_expression and get_world_time executors', () => {
+  test('evaluates arithmetic expressions safely without eval', () => {
+    const res = executeToolCall(
+      call('calculate_expression', { expression: '128.40 * 1.18 / 4' })
+    );
+    assert.strictEqual(res.ok, true);
+    assert.strictEqual(res.simulated, false);
+    assert.ok(res.message.includes('37.878'));
+
+    const parens = executeToolCall(
+      call('calculate_expression', { expression: '(2 + 3) * 4 - 5' })
+    );
+    assert.strictEqual(parens.ok, true);
+    assert.ok(parens.message.endsWith('= 15'));
+  });
+
+  test('rejects division by zero and unsafe input in calculate_expression', () => {
+    const divZero = executeToolCall(call('calculate_expression', { expression: '10 / 0' }));
+    assert.strictEqual(divZero.ok, false);
+
+    const injection = executeToolCall(
+      call('calculate_expression', { expression: 'process.exit(1)' })
+    );
+    assert.strictEqual(injection.ok, false);
+  });
+
+  test('resolves live world clock times for recognized cities and IANA zones', () => {
+    const res = executeToolCall(
+      call('get_world_time', { locations: 'Tokyo and London' }),
+      { now: new Date('2026-10-24T12:00:00Z') }
+    );
+    assert.strictEqual(res.ok, true);
+    assert.strictEqual(res.simulated, false);
+    assert.ok(res.message.includes('Tokyo:'));
+    assert.ok(res.message.includes('London:'));
+  });
+
+  test('returns error outcome for completely unknown world-clock locations', () => {
+    const res = executeToolCall(call('get_world_time', { locations: 'Atlantis' }));
+    assert.strictEqual(res.ok, false);
+  });
 });
