@@ -1,7 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMockResponse, toolDefinitions, formatToolNarrative } from '@/lib/tools';
+import {
+  getMockResponse,
+  toolDefinitions,
+  toGeminiToolDeclarations,
+  formatToolNarrative,
+} from '@/lib/tools';
 import { sanitizeMessages } from './messageSanitizer';
 import { executeToolCall, type ToolExecutionResult } from '@/lib/toolExecutors';
+import {
+  buildSystemPrompt,
+  coalesceGeminiModelParts,
+  extractGeminiParts,
+  toGeminiContents,
+  type GeminiContent,
+  type GeminiPart,
+  type GeminiTurnItem,
+  type RawGeminiCandidate,
+} from '@/lib/providerHelpers';
 import type { Message, ToolCall, ChatStreamEvent } from '@/types/types';
 
 // ─── Configuration ───
@@ -332,20 +347,6 @@ class ProviderHttpError extends Error {
   }
 }
 
-type GeminiPart =
-  | { text: string }
-  | { inline_data: { mime_type: string; data: string } }
-  | { functionCall: GeminiFunctionCall }
-  | { functionResponse: { name: string; response: { result: string } } };
-type GeminiFunctionCall = { name: string; args?: unknown };
-
-// Normalized items from one Gemini streaming turn.
-interface GeminiTurnItem {
-  text?: string;
-  functionCall?: GeminiFunctionCall;
-  finishReason?: string;
-}
-
 const GEMINI_SYSTEM_INSTRUCTION = `You are Voxelle, a helpful voice-enabled multimodal AI assistant and ambient co-pilot. You can:
 1. Have natural, concise conversations suited for voice synthesis.
 2. Schedule calendar events using the add_calendar_event tool.
@@ -354,44 +355,20 @@ const GEMINI_SYSTEM_INSTRUCTION = `You are Voxelle, a helpful voice-enabled mult
 
 Keep your responses natural, conversational, and direct since they may be spoken aloud.`;
 
-function toGeminiContents(messages: Message[], image?: string): Array<{ role: string; parts: GeminiPart[] }> {
-  const contents = messages.map((m) => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: m.content ? [{ text: m.content } as GeminiPart] : [],
-  }));
-
-  // Attach image to the most recent user turn
-  if (image && contents.length > 0) {
-    const lastMsg = contents[contents.length - 1];
-    if (lastMsg.role === 'user') {
-      const match = image.match(/^data:([^;]+);base64,(.+)$/);
-      if (match) {
-        lastMsg.parts.push({
-          inline_data: {
-            mime_type: match[1],
-            data: match[2],
-          },
-        });
-      }
-    }
-  }
-  return contents;
-}
-
 // One streaming turn against Gemini. Throws ProviderHttpError before any
 // output when the request itself fails, so callers can fall back cleanly.
 async function* geminiTurn(
-  contents: Array<{ role: string; parts: GeminiPart[] }>,
+  contents: GeminiContent[],
   signal: AbortSignal,
   includeTools: boolean
 ): AsyncGenerator<GeminiTurnItem> {
   const geminiBody: Record<string, unknown> = {
     contents,
-    system_instruction: { parts: [{ text: GEMINI_SYSTEM_INSTRUCTION }] },
+    system_instruction: { parts: [{ text: buildSystemPrompt(GEMINI_SYSTEM_INSTRUCTION) }] },
     generationConfig: { temperature: 0.7, topP: 0.95, maxOutputTokens: 512 },
   };
   if (includeTools) {
-    geminiBody.tools = [{ function_declarations: toolDefinitions }];
+    geminiBody.tools = [{ function_declarations: toGeminiToolDeclarations() }];
   }
 
   const res = await fetch(
@@ -415,10 +392,7 @@ async function* geminiTurn(
 
   for await (const payload of parseSse(res.body)) {
     let chunk: {
-      candidates?: Array<{
-        finishReason?: string;
-        content?: { parts?: Array<{ text?: string; functionCall?: GeminiFunctionCall }> };
-      }>;
+      candidates?: RawGeminiCandidate[];
     };
     try {
       chunk = JSON.parse(payload);
@@ -427,15 +401,9 @@ async function* geminiTurn(
     }
 
     const candidate = chunk.candidates?.[0];
-    const item: GeminiTurnItem = {};
-    if (candidate?.finishReason) item.finishReason = candidate.finishReason;
-    const parts = candidate?.content?.parts;
-    if (Array.isArray(parts) && parts.length > 0) {
-      const part = parts[0];
-      if (typeof part.text === 'string' && part.text) item.text = part.text;
-      else if (part.functionCall) item.functionCall = part.functionCall;
+    for (const item of extractGeminiParts(candidate)) {
+      yield item;
     }
-    if (item.text || item.functionCall || item.finishReason) yield item;
   }
 }
 
@@ -487,9 +455,9 @@ async function* streamGemini(
       // grounded reply instead of the client inventing one. Tools are
       // withheld on this turn — exactly one round-trip, bounded latency.
       try {
-        const roundTripContents = [
+        const roundTripContents: GeminiContent[] = [
           ...contents,
-          { role: 'model', parts: modelParts },
+          { role: 'model', parts: coalesceGeminiModelParts(modelParts) },
           {
             role: 'user',
             parts: executed.map(({ call, result }) => ({
@@ -508,8 +476,9 @@ async function* streamGemini(
           }
         }
       } catch (err) {
-        if (requestSignal.aborted || deadline.aborted) return;
+        if (requestSignal.aborted) return;
         console.error('Gemini tool round-trip failed:', err);
+        if (deadline.aborted) finishReason = 'MAX_TOKENS';
         // The tool DID run — fall through to the narrative below.
       }
 
@@ -610,28 +579,32 @@ async function* groqTurn(
     }
 
     const choice = chunk.choices?.[0];
-    const item: GroqTurnItem = {};
-    if (choice?.finish_reason) {
-      item.finishReason =
-        choice.finish_reason === 'length'
-          ? 'MAX_TOKENS'
-          : choice.finish_reason === 'tool_calls'
-            ? 'TOOL_CALLS'
-            : 'STOP';
+    const finishReason = choice?.finish_reason
+      ? choice.finish_reason === 'length'
+        ? 'MAX_TOKENS'
+        : choice.finish_reason === 'tool_calls'
+          ? 'TOOL_CALLS'
+          : 'STOP'
+      : undefined;
+
+    if (choice?.delta?.content) {
+      yield { text: choice.delta.content };
     }
-    if (choice?.delta?.content) item.text = choice.delta.content;
     if (choice?.delta?.tool_calls?.length) {
-      // Only the first tool call per delta matters for our single-tool flows;
-      // fragments arrive split across chunks with a stable index.
-      const tc = choice.delta.tool_calls[0];
-      item.toolCallDelta = {
-        index: tc.index,
-        id: tc.id,
-        name: tc.function?.name,
-        args: tc.function?.arguments,
-      };
+      for (const tc of choice.delta.tool_calls) {
+        yield {
+          toolCallDelta: {
+            index: tc.index,
+            id: tc.id,
+            name: tc.function?.name,
+            args: tc.function?.arguments,
+          },
+        };
+      }
     }
-    if (item.text || item.toolCallDelta || item.finishReason) yield item;
+    if (finishReason) {
+      yield { finishReason };
+    }
   }
 }
 
@@ -739,8 +712,9 @@ async function* streamGroq(
           }
         }
       } catch (err) {
-        if (requestSignal.aborted || deadline.aborted) return;
+        if (requestSignal.aborted) return;
         console.error('Groq tool round-trip failed:', err);
+        if (deadline.aborted) finishReason = 'MAX_TOKENS';
         // The tool DID run — fall through to the narrative below.
       }
 

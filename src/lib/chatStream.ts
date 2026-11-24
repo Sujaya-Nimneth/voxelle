@@ -59,51 +59,65 @@ export async function readChatStream(
   let buffer = '';
   let result: ChatStreamResult = { done: false };
 
+  const dispatchEvents = (events: ChatStreamEvent[]): ChatStreamResult | null => {
+    for (const event of events) {
+      handlers.onEvent?.();
+      switch (event.type) {
+        case 'meta':
+          handlers.onMeta?.(event);
+          break;
+        case 'delta':
+          if (event.text) handlers.onDelta?.(event.text);
+          break;
+        case 'tool':
+          if (event.toolCall && typeof event.toolCall.name === 'string') {
+            handlers.onTool?.(event.toolCall);
+          }
+          break;
+        case 'tool_result':
+          if (event.toolCallId) {
+            handlers.onToolResult?.({
+              toolCallId: event.toolCallId,
+              ok: event.ok,
+              message: event.message,
+              ics: event.ics,
+              simulated: event.simulated,
+            });
+          }
+          break;
+        case 'error':
+          // A parseable-but-malformed line may carry no message; never
+          // propagate undefined into caller checks.
+          handlers.onError?.(event.message || 'The assistant stream reported an error.');
+          break;
+        case 'done':
+          result = { done: true, finishReason: event.finishReason };
+          handlers.onDone?.();
+          return result;
+      }
+    }
+    return null;
+  };
+
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        buffer += decoder.decode();
+        if (buffer.trim()) {
+          const { events } = parseStreamBuffer(buffer + '\n');
+          const finished = dispatchEvents(events);
+          if (finished) return finished;
+        }
+        break;
+      }
       buffer += decoder.decode(value, { stream: true });
 
       const { events, rest } = parseStreamBuffer(buffer);
       buffer = rest;
 
-      for (const event of events) {
-        handlers.onEvent?.();
-        switch (event.type) {
-          case 'meta':
-            handlers.onMeta?.(event);
-            break;
-          case 'delta':
-            if (event.text) handlers.onDelta?.(event.text);
-            break;
-          case 'tool':
-            if (event.toolCall && typeof event.toolCall.name === 'string') {
-              handlers.onTool?.(event.toolCall);
-            }
-            break;
-          case 'tool_result':
-            if (event.toolCallId) {
-              handlers.onToolResult?.({
-                toolCallId: event.toolCallId,
-                ok: event.ok,
-                message: event.message,
-                ics: event.ics,
-                simulated: event.simulated,
-              });
-            }
-            break;
-          case 'error':
-            // A parseable-but-malformed line may carry no message; never
-            // propagate undefined into caller checks.
-            handlers.onError?.(event.message || 'The assistant stream reported an error.');
-            break;
-          case 'done':
-            result = { done: true, finishReason: event.finishReason };
-            handlers.onDone?.();
-            return result;
-        }
-      }
+      const finished = dispatchEvents(events);
+      if (finished) return finished;
     }
   } finally {
     reader.releaseLock();

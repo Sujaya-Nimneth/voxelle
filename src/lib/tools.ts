@@ -1,25 +1,41 @@
 import type { ToolCall } from '@/types/types';
 
-// ─── Tool Definitions (compatible with Gemini & OpenAI function calling formats) ───
+// ─── Tool Definitions (standard JSON Schema, with Gemini REST uppercasing helper) ───
 
-export const toolDefinitions = [
+export interface ToolSchemaProperty {
+  type: 'string' | 'number' | 'boolean' | 'object' | 'array';
+  description: string;
+  enum?: string[];
+}
+
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  parameters: {
+    type: 'object';
+    properties: Record<string, ToolSchemaProperty>;
+    required: string[];
+  };
+}
+
+export const toolDefinitions: ToolDefinition[] = [
   {
     name: 'add_calendar_event',
     description:
       'Adds a new event to the user\'s calendar. Use this when the user asks to schedule, book, or add a meeting, appointment, reminder, or any calendar event.',
     parameters: {
-      type: 'OBJECT',
+      type: 'object',
       properties: {
         title: {
-          type: 'STRING',
+          type: 'string',
           description: 'The title or name of the event',
         },
         time: {
-          type: 'STRING',
+          type: 'string',
           description: 'The time of the event (e.g. "3:00 PM", "14:30", "2:00 PM")',
         },
         date: {
-          type: 'STRING',
+          type: 'string',
           description: 'The date of the event (e.g. "today", "tomorrow", "this afternoon", "2026-09-18")',
         },
       },
@@ -31,14 +47,14 @@ export const toolDefinitions = [
     description:
       'Turns a smart home device on or off. Use this when the user asks to control, turn on, turn off, enable, or disable a home device like lights, thermostat, fan, TV, etc.',
     parameters: {
-      type: 'OBJECT',
+      type: 'object',
       properties: {
         device_name: {
-          type: 'STRING',
+          type: 'string',
           description: 'The name of the device to control (e.g. "living room lights", "thermostat", "studio focus lights")',
         },
         state: {
-          type: 'STRING',
+          type: 'string',
           enum: ['on', 'off'],
           description: 'Whether to turn the device on or off',
         },
@@ -47,6 +63,24 @@ export const toolDefinitions = [
     },
   },
 ];
+
+/** Gemini REST v1beta expects uppercase schema types (OBJECT, STRING, NUMBER). */
+export function toGeminiToolDeclarations(defs: ToolDefinition[] = toolDefinitions) {
+  return defs.map((td) => ({
+    name: td.name,
+    description: td.description,
+    parameters: {
+      type: td.parameters.type.toUpperCase(),
+      properties: Object.fromEntries(
+        Object.entries(td.parameters.properties).map(([key, prop]) => [
+          key,
+          { ...prop, type: prop.type.toUpperCase() },
+        ])
+      ),
+      required: td.parameters.required,
+    },
+  }));
+}
 
 // ─── Tool Result Formatting (single source for server + client) ───
 
