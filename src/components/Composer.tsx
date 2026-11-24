@@ -32,7 +32,8 @@ export interface ComposerProps {
   interimTranscript?: string;
   uploadedImage: string | null;
   onImageChange: (dataUrl: string | null) => void;
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string) => boolean | void;
+  onStopGenerating: () => void;
   onToggleListening: () => void;
   onStopSpeaking: () => void;
   autoSpeak: boolean;
@@ -48,6 +49,7 @@ export function Composer({
   uploadedImage,
   onImageChange,
   onSendMessage,
+  onStopGenerating,
   onToggleListening,
   onStopSpeaking,
   autoSpeak,
@@ -60,7 +62,8 @@ export function Composer({
   const [attachedFileName, setAttachedFileName] = useState<string>('Attached image');
   const inputHandleRef = useRef<ChatComposerInputHandle | null>(null);
 
-  const canSend = draft.trim().length > 0 || Boolean(uploadedImage);
+  const isProcessing = status === 'processing';
+  const canSend = !isProcessing && (draft.trim().length > 0 || Boolean(uploadedImage));
 
   // External focus trigger (e.g., PermissionWarning "Focus input" action)
   useEffect(() => {
@@ -120,14 +123,16 @@ export function Composer({
 
   const submitMessage = useCallback(
     (rawValue?: string) => {
+      if (isProcessing) return;
       const text = (rawValue ?? draft).trim();
       if (!text && !uploadedImage) return;
-      onSendMessage(text || 'Describe this image');
+      const accepted = onSendMessage(text || 'Describe this image');
+      if (accepted === false) return;
       setDraft('');
       setFileError('');
       setShowDropzone(false);
     },
-    [draft, uploadedImage, onSendMessage]
+    [draft, isProcessing, uploadedImage, onSendMessage]
   );
 
   const drawerOpen = showDropzone || Boolean(uploadedImage);
@@ -180,6 +185,8 @@ export function Composer({
       value={draft}
       onChange={setDraft}
       onSubmit={(val) => submitMessage(val)}
+      onStop={onStopGenerating}
+      isStopShown={isProcessing}
       drawer={drawerContent}
       status={fileError ? { type: 'error', message: fileError } : undefined}
       headerContext={
@@ -281,6 +288,8 @@ export function Composer({
       }
       sendButton={
         <ChatSendButton
+          isStopShown={isProcessing}
+          onStop={onStopGenerating}
           isDisabled={!canSend}
           onSend={() => submitMessage()}
         />

@@ -210,6 +210,7 @@ export function useAssistant() {
     isListening,
     toggleListening,
     sendTextMessage: pipeline.sendTextMessage,
+    stopGenerating: pipeline.stopGenerating,
     retryLastMessage: pipeline.retryLastMessage,
     dismissToolEvent: pipeline.dismissToolEvent,
     stopSpeaking,

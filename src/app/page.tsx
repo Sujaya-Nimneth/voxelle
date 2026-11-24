@@ -67,6 +67,7 @@ function VoxelleWorkspace() {
     isListening,
     toggleListening,
     sendTextMessage,
+    stopGenerating,
     retryLastMessage,
     dismissToolEvent,
     stopSpeaking,
@@ -130,7 +131,6 @@ function VoxelleWorkspace() {
       switchConversation(paramThread);
     }
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync drawer state from initial/external URL navigation
     setActivityOpen(paramPanel === 'activity');
   }, [activeConversationId, conversations, searchParams, searchString, switchConversation]);
 
@@ -238,15 +238,20 @@ function VoxelleWorkspace() {
       }
       if (
         e.key === 'Escape' &&
-        status === 'speaking' &&
         !commandPaletteOpen &&
         !capabilitiesOpen &&
         !settingsOpen &&
         !activityOpen
       ) {
-        e.preventDefault();
-        stopSpeaking();
-        setLiveAnnouncement('Speech muted');
+        if (status === 'processing') {
+          e.preventDefault();
+          stopGenerating();
+          setLiveAnnouncement('Generation stopped');
+        } else if (status === 'speaking') {
+          e.preventDefault();
+          stopSpeaking();
+          setLiveAnnouncement('Speech muted');
+        }
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -258,6 +263,7 @@ function VoxelleWorkspace() {
     handleToggleActivity,
     settingsOpen,
     status,
+    stopGenerating,
     stopSpeaking,
   ]);
 
@@ -278,6 +284,7 @@ function VoxelleWorkspace() {
       uploadedImage={uploadedImage}
       onImageChange={setUploadedImage}
       onSendMessage={sendTextMessage}
+      onStopGenerating={stopGenerating}
       onToggleListening={toggleListening}
       onStopSpeaking={stopSpeaking}
       autoSpeak={autoSpeak}
