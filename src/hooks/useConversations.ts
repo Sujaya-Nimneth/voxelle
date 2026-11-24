@@ -95,6 +95,8 @@ export function useConversations() {
   const [conversations, setConversations] = useState<ConversationMeta[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const hydratedRef = useRef(false);
+  const conversationsRef = useRef<ConversationMeta[]>([]);
+  const activeIdRef = useRef<string | null>(null);
 
   // Mount-only hydration: adopt the stored index and active thread, or
   // create the first thread for a fresh visitor.
@@ -144,6 +146,8 @@ export function useConversations() {
     const active =
       storedActive && index.some((c) => c.id === storedActive) ? storedActive : index[0].id;
 
+    conversationsRef.current = index;
+    activeIdRef.current = active;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-only hydration from external storage
     setConversations(index);
     setActiveId(active);
@@ -152,22 +156,35 @@ export function useConversations() {
 
   const persistActive = useCallback((messages: Message[]) => {
     if (!hydratedRef.current) return;
-    const id = activeId ?? undefined;
+    const id = activeIdRef.current;
     if (!id) return;
+    // Defer storage & metadata updates while tokens are actively streaming
+    // so 60ms delta ticks don't thrash localStorage or Sidebar state.
+    if (messages.some((m) => m.isStreaming)) return;
+
     saveMessages(id, messages);
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === id
-          ? {
-              ...c,
-              // Title locks in once the first user message exists.
-              title: c.title === 'New conversation' ? titleFromMessages(messages) : c.title,
-              updatedAt: Date.now(),
-            }
-          : c
-      )
+
+    const prev = conversationsRef.current;
+    const target = prev.find((c) => c.id === id);
+    if (!target) return;
+
+    const nextTitle =
+      target.title === 'New conversation' ? titleFromMessages(messages) : target.title;
+    if (messages.length === 0 && nextTitle === target.title) return;
+
+    const next = prev.map((c) =>
+      c.id === id
+        ? {
+            ...c,
+            title: nextTitle,
+            updatedAt: Date.now(),
+          }
+        : c
     );
-  }, [activeId]);
+    conversationsRef.current = next;
+    saveIndex(next);
+    setConversations(next);
+  }, []);
 
   // Stable reference for the pipeline: bumps thread metadata (title/updatedAt)
   // as messages flow without re-creating pipeline callbacks.
@@ -177,12 +194,13 @@ export function useConversations() {
   }, [persistActive]);
 
   const readActive = useCallback((id?: string): Message[] => {
-    const target = id ?? activeId;
+    const target = id ?? activeIdRef.current;
     if (!target) return [];
     return loadMessages(target);
-  }, [activeId]);
+  }, []);
 
   const switchTo = useCallback((id: string) => {
+    activeIdRef.current = id;
     setActiveId(id);
     try {
       localStorage.setItem(ACTIVE_KEY, id);
@@ -199,8 +217,10 @@ export function useConversations() {
       createdAt: now,
       updatedAt: now,
     };
-    setConversations((prev) => [meta, ...prev]);
-    saveIndex([meta, ...loadIndex()]);
+    const next = [meta, ...conversationsRef.current];
+    conversationsRef.current = next;
+    setConversations(next);
+    saveIndex(next);
     switchTo(meta.id);
     return meta.id;
   }, [switchTo]);
@@ -208,21 +228,24 @@ export function useConversations() {
   // Deletes a thread from storage and state. The consumer orchestrates what
   // happens to the open pipeline (switch or new) — this hook only owns data.
   const remove = useCallback((id: string) => {
-    const next = loadIndex().filter((c) => c.id !== id);
+    const next = conversationsRef.current.filter((c) => c.id !== id);
     try {
       localStorage.removeItem(convKey(id));
     } catch {
       // Ignore
     }
+    conversationsRef.current = next;
     saveIndex(next);
     setConversations(next);
   }, []);
+
+  const persistActiveStable = useCallback((m: Message[]) => persistRef.current(m), []);
 
   return {
     conversations,
     activeId,
     readActive,
-    persistActive: useCallback((m: Message[]) => persistRef.current(m), []),
+    persistActive: persistActiveStable,
     switchTo,
     createNew,
     remove,
