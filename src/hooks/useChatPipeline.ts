@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { optimizeImage } from '@/lib/imageUtils';
 import { buildHistoryForApi } from '@/lib/chatResponse';
 import { readChatStream } from '@/lib/chatStream';
@@ -474,26 +474,49 @@ export function useChatPipeline({
     setToolEvents((prev) => prev.filter((te) => te.id !== id));
   }, []);
 
-  return {
-    status,
-    setStatus,
-    statusRef,
-    messages,
-    setMessages,
-    toolEvents,
-    dismissToolEvent,
-    uploadedImage,
-    setUploadedImage: handleSetUploadedImage,
-    activeProvider,
-    activeModel,
-    isDegraded,
-    degradedReason,
-    processMessage,
-    sendTextMessage,
-    stopGenerating,
-    retryLastMessage,
-    speakMessage,
-    resetConversation,
-    isBusy: () => isNetworkBusyRef.current,
-  };
+  const isBusy = useCallback(() => isNetworkBusyRef.current, []);
+
+  return useMemo(
+    () => ({
+      status,
+      setStatus,
+      statusRef,
+      messages,
+      setMessages,
+      toolEvents,
+      dismissToolEvent,
+      uploadedImage,
+      setUploadedImage: handleSetUploadedImage,
+      activeProvider,
+      activeModel,
+      isDegraded,
+      degradedReason,
+      processMessage,
+      sendTextMessage,
+      stopGenerating,
+      retryLastMessage,
+      speakMessage,
+      resetConversation,
+      isBusy,
+    }),
+    [
+      status,
+      messages,
+      toolEvents,
+      dismissToolEvent,
+      uploadedImage,
+      handleSetUploadedImage,
+      activeProvider,
+      activeModel,
+      isDegraded,
+      degradedReason,
+      processMessage,
+      sendTextMessage,
+      stopGenerating,
+      retryLastMessage,
+      speakMessage,
+      resetConversation,
+      isBusy,
+    ]
+  );
 }

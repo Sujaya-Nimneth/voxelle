@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Activity, AlertTriangle, CheckCircle2, Cpu, Info, ShieldCheck, Wrench } from 'lucide-react';
 import { Badge } from '@astryxdesign/core/Badge';
 import { BottomSheet } from '@astryxdesign/core/BottomSheet';
@@ -46,7 +46,7 @@ export interface ActivityRailProps {
   degradedReason?: string | null;
 }
 
-export default function ActivityRail({
+function ActivityRail({
   isOpen,
   onOpenChange,
   status,
@@ -218,3 +218,5 @@ export default function ActivityRail({
     </Drawer>
   );
 }
+
+export default memo(ActivityRail);

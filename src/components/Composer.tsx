@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Image as ImageIcon,
   ImagePlus,
@@ -45,7 +45,7 @@ export interface ComposerProps {
   focusRequestCount?: number;
 }
 
-export function Composer({
+export const Composer = memo(function Composer({
   status,
   isListening,
   sttSupported,
@@ -302,4 +302,4 @@ export function Composer({
       }
     />
   );
-}
+});

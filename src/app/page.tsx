@@ -276,22 +276,55 @@ function VoxelleWorkspace() {
   const activeThreadTitle = activeThread?.title?.trim() || 'New conversation';
   const badgeCount = toolEvents.length;
 
-  const composerElement = (
-    <Composer
-      status={status}
-      isListening={isListening}
-      sttSupported={sttSupported}
-      interimTranscript={interimTranscript}
-      uploadedImage={uploadedImage}
-      onImageChange={setUploadedImage}
-      onSendMessage={sendTextMessage}
-      onStopGenerating={stopGenerating}
-      onToggleListening={toggleListening}
-      onStopSpeaking={stopSpeaking}
-      autoSpeak={autoSpeak}
-      onToggleAutoSpeak={toggleAutoSpeak}
-      focusRequestCount={focusRequestCount}
-    />
+  const handleFocusComposer = useCallback(() => {
+    setFocusRequestCount((n) => n + 1);
+  }, []);
+  const handleOpenCommandPalette = useCallback(() => {
+    setCommandPaletteOpen(true);
+  }, []);
+  const handleOpenCapabilities = useCallback(() => {
+    setCapabilitiesOpen(true);
+  }, []);
+  const handleOpenSettings = useCallback(() => {
+    setSettingsOpen(true);
+  }, []);
+  const handleToggleActivityCommand = useCallback(() => {
+    handleToggleActivity(!activityOpen);
+  }, [activityOpen, handleToggleActivity]);
+
+  const composerElement = useMemo(
+    () => (
+      <Composer
+        status={status}
+        isListening={isListening}
+        sttSupported={sttSupported}
+        interimTranscript={interimTranscript}
+        uploadedImage={uploadedImage}
+        onImageChange={setUploadedImage}
+        onSendMessage={sendTextMessage}
+        onStopGenerating={stopGenerating}
+        onToggleListening={toggleListening}
+        onStopSpeaking={stopSpeaking}
+        autoSpeak={autoSpeak}
+        onToggleAutoSpeak={toggleAutoSpeak}
+        focusRequestCount={focusRequestCount}
+      />
+    ),
+    [
+      status,
+      isListening,
+      sttSupported,
+      interimTranscript,
+      uploadedImage,
+      setUploadedImage,
+      sendTextMessage,
+      stopGenerating,
+      toggleListening,
+      stopSpeaking,
+      autoSpeak,
+      toggleAutoSpeak,
+      focusRequestCount,
+    ]
   );
 
   return (
@@ -311,7 +344,7 @@ function VoxelleWorkspace() {
             sttError={sttError}
             sttSupported={sttSupported}
             onDismissError={clearSttError}
-            onFocusComposer={() => setFocusRequestCount((n) => n + 1)}
+            onFocusComposer={handleFocusComposer}
           />
         }
         topNav={
@@ -338,7 +371,7 @@ function VoxelleWorkspace() {
                   icon={<Search size={18} aria-hidden="true" />}
                   variant="ghost"
                   size="sm"
-                  onClick={() => setCommandPaletteOpen(true)}
+                  onClick={handleOpenCommandPalette}
                 />
                 <SettingsPopover
                   isOpen={settingsOpen}
@@ -360,7 +393,7 @@ function VoxelleWorkspace() {
                   }
                   variant={activityOpen ? 'secondary' : 'ghost'}
                   size="sm"
-                  onClick={() => handleToggleActivity(!activityOpen)}
+                  onClick={handleToggleActivityCommand}
                 />
               </HStack>
             }
@@ -373,9 +406,9 @@ function VoxelleWorkspace() {
             onSelectConversation={handleSelectConversation}
             onNewConversation={handleNewConversation}
             onDeleteConversation={handleDeleteConversation}
-            onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-            onOpenCapabilities={() => setCapabilitiesOpen(true)}
-            onOpenSettings={() => setSettingsOpen(true)}
+            onOpenCommandPalette={handleOpenCommandPalette}
+            onOpenCapabilities={handleOpenCapabilities}
+            onOpenSettings={handleOpenSettings}
             activeProvider={activeProvider}
             activeModel={activeModel}
             isDegraded={isDegraded}
@@ -434,9 +467,9 @@ function VoxelleWorkspace() {
           onSelectConversation={handleSelectConversation}
           onToggleListening={toggleListening}
           onToggleAutoSpeak={toggleAutoSpeak}
-          onToggleActivity={() => handleToggleActivity(!activityOpen)}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onOpenCapabilities={() => setCapabilitiesOpen(true)}
+          onToggleActivity={handleToggleActivityCommand}
+          onOpenSettings={handleOpenSettings}
+          onOpenCapabilities={handleOpenCapabilities}
         />
       ) : null}
     </>

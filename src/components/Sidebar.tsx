@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import {
   MessageSquare,
   Search,
@@ -41,7 +41,7 @@ export interface SidebarProps {
   degradedReason?: string | null;
 }
 
-export default function Sidebar({
+function Sidebar({
   conversations,
   activeConversationId,
   onSelectConversation,
@@ -183,3 +183,5 @@ export default function Sidebar({
     </>
   );
 }
+
+export default memo(Sidebar);
