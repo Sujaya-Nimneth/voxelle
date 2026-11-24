@@ -3,16 +3,34 @@ import assert from 'node:assert';
 import {
   getMockResponse,
   toolDefinitions,
+  toGeminiToolDeclarations,
   formatToolResult,
   formatToolNarrative,
 } from '../src/lib/tools.ts';
 
 describe('Voxelle Assistant Tools & Mock Engine', () => {
-  test('toolDefinitions contains calendar and smart home specifications', () => {
-    assert.strictEqual(toolDefinitions.length, 2);
+  test('toolDefinitions contains all 4 server-executed tool specifications with lowercase JSON schema types', () => {
+    assert.strictEqual(toolDefinitions.length, 4);
     const names = toolDefinitions.map((t) => t.name);
     assert.ok(names.includes('add_calendar_event'));
     assert.ok(names.includes('toggle_smart_home_device'));
+    assert.ok(names.includes('calculate_expression'));
+    assert.ok(names.includes('get_world_time'));
+
+    for (const def of toolDefinitions) {
+      assert.strictEqual(def.parameters.type, 'object');
+      for (const prop of Object.values(def.parameters.properties)) {
+        assert.strictEqual(prop.type, prop.type.toLowerCase());
+      }
+    }
+  });
+
+  test('toGeminiToolDeclarations uppercases schema types for Gemini REST API', () => {
+    const geminiDefs = toGeminiToolDeclarations();
+    assert.strictEqual(geminiDefs.length, 4);
+    assert.strictEqual(geminiDefs[0].parameters.type, 'OBJECT');
+    assert.strictEqual(geminiDefs[0].parameters.properties.title.type, 'STRING');
+    assert.strictEqual(geminiDefs[0].parameters.properties.duration_minutes.type, 'NUMBER');
   });
 
   test('calendar tool definition has required properties', () => {
@@ -110,5 +128,26 @@ describe('Voxelle Assistant Tools & Mock Engine', () => {
     });
     assert.ok(narrative.startsWith("I've turned"));
     assert.ok(!narrative.includes('undefined'));
+  });
+
+  test('all 4 ChatLog starter prompts resolve to real tool calls in Demo Mode', () => {
+    const cal = getMockResponse('Schedule a team sync tomorrow at 10:00 AM for 30 minutes');
+    assert.strictEqual(cal.toolCalls?.[0]?.name, 'add_calendar_event');
+    assert.strictEqual(cal.toolCalls?.[0]?.arguments.title, 'Team sync');
+    assert.strictEqual(cal.toolCalls?.[0]?.arguments.duration_minutes, 30);
+    assert.strictEqual(cal.toolCalls?.[0]?.arguments.time, '10:00 AM');
+
+    const home = getMockResponse('Set the living room lights to 40%');
+    assert.strictEqual(home.toolCalls?.[0]?.name, 'toggle_smart_home_device');
+    assert.strictEqual(home.toolCalls?.[0]?.arguments.state, 'on');
+    assert.strictEqual(home.toolCalls?.[0]?.arguments.setting, '40%');
+
+    const math = getMockResponse('Calculate 128.40 * 1.18 / 4');
+    assert.strictEqual(math.toolCalls?.[0]?.name, 'calculate_expression');
+    assert.strictEqual(math.toolCalls?.[0]?.arguments.expression, '128.40 * 1.18 / 4');
+
+    const clock = getMockResponse('What time is it right now in Tokyo and London?');
+    assert.strictEqual(clock.toolCalls?.[0]?.name, 'get_world_time');
+    assert.strictEqual(clock.toolCalls?.[0]?.arguments.locations, 'Tokyo and London');
   });
 });

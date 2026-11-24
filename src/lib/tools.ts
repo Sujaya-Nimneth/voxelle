@@ -361,7 +361,7 @@ function extractSmartHomeArgs(userMessage: string): ToolCall['arguments'] {
     ? 'off'
     : 'on';
 
-  const settingMatch = userMessage.match(/\b(\d{1,3}\s*%|(?:\d{2,3}\s*°?\s*[fc]))\b/i);
+  const settingMatch = userMessage.match(/\b(\d{1,3}\s*%|(?:\d{2,3}\s*°?\s*[fc]))(?=\s|$|[.,!?])/i);
   const setting = settingMatch ? settingMatch[1].replace(/\s+/g, '') : undefined;
 
   let device_name = 'Living Room Lights';
