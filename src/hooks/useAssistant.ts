@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import type { Message } from '@/types/types';
 import { useSpeechRecognition } from './useSpeechRecognition';
 import { useSpeechSynthesis } from './useSpeechSynthesis';
 import { useSessionEvents } from './useSessionEvents';
@@ -19,9 +20,9 @@ export function useAssistant() {
   const [autoSpeak, setAutoSpeak] = useState(true);
 
   // While a thread switch is loading stored messages into the pipeline,
-  // persistence is suppressed so the outgoing thread's messages can't be
-  // written over the incoming one.
-  const loadingThreadRef = useRef(false);
+  // persistence is suppressed for that exact loaded snapshot so an outgoing
+  // thread's messages cannot overwrite the incoming thread.
+  const suppressPersistSnapshotRef = useRef<Message[] | null>(null);
   const initialLoadRef = useRef(false);
 
   // Hook integrations
@@ -61,27 +62,26 @@ export function useAssistant() {
   useEffect(() => {
     if (initialLoadRef.current || !conversations.activeId) return;
     initialLoadRef.current = true;
-    loadingThreadRef.current = true;
     const stored = conversations.readActive();
     if (stored.length > 0) {
+      suppressPersistSnapshotRef.current = stored;
       pipeline.setMessages(stored);
     }
     setHydrated(true);
-    // Re-enable persistence after the load's render effects have settled.
-    setTimeout(() => {
-      loadingThreadRef.current = false;
-    }, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-time load
   }, [conversations.activeId]);
 
-  // Persist the active thread whenever its messages change. persistActive
-  // keeps a stable identity (it delegates through a ref), so this effect
-  // runs on message changes — not every render.
+  // Persist the active thread whenever its messages settle. persistActive
+  // keeps a stable identity, so this effect runs on message changes only.
   const persistActive = conversations.persistActive;
   useEffect(() => {
-    if (hydrated && !loadingThreadRef.current) {
-      persistActive(pipeline.messages);
+    if (!hydrated) return;
+    if (suppressPersistSnapshotRef.current === pipeline.messages) {
+      suppressPersistSnapshotRef.current = null;
+      return;
     }
+    suppressPersistSnapshotRef.current = null;
+    persistActive(pipeline.messages);
   }, [pipeline.messages, hydrated, persistActive]);
 
   // Hydrate the auto-speak preference.
@@ -112,40 +112,38 @@ export function useAssistant() {
   const handleSwitchConversation = useCallback(
     (id: string) => {
       if (id === conversations.activeId) return;
-      loadingThreadRef.current = true;
       stopSpeaking();
       pipeline.resetConversation();
-      pipeline.setMessages(conversations.readActive(id));
+      const stored = conversations.readActive(id);
+      suppressPersistSnapshotRef.current = stored;
+      pipeline.setMessages(stored);
       conversations.switchTo(id);
-      setTimeout(() => {
-        loadingThreadRef.current = false;
-      }, 0);
     },
     [conversations, pipeline, stopSpeaking]
   );
 
-  const handleNewConversation = useCallback(() => {
-    loadingThreadRef.current = true;
+  const handleNewConversation = useCallback((): string => {
     stopSpeaking();
+    const empty: Message[] = [];
+    suppressPersistSnapshotRef.current = empty;
     pipeline.resetConversation();
-    conversations.createNew();
-    setTimeout(() => {
-      loadingThreadRef.current = false;
-    }, 0);
+    pipeline.setMessages(empty);
+    return conversations.createNew();
   }, [conversations, pipeline, stopSpeaking]);
 
   const handleDeleteConversation = useCallback(
-    (id: string) => {
+    (id: string): string | null => {
       const wasActive = id === conversations.activeId;
       const remaining = conversations.conversations.filter((c) => c.id !== id);
       conversations.remove(id);
       if (wasActive) {
         if (remaining.length > 0) {
           handleSwitchConversation(remaining[0].id);
-        } else {
-          handleNewConversation();
+          return remaining[0].id;
         }
+        return handleNewConversation();
       }
+      return null;
     },
     [conversations, handleSwitchConversation, handleNewConversation]
   );
@@ -212,6 +210,7 @@ export function useAssistant() {
     isListening,
     toggleListening,
     sendTextMessage: pipeline.sendTextMessage,
+    stopGenerating: pipeline.stopGenerating,
     retryLastMessage: pipeline.retryLastMessage,
     dismissToolEvent: pipeline.dismissToolEvent,
     stopSpeaking,

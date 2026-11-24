@@ -408,16 +408,28 @@ export function useChatPipeline({
   }, [processMessage]);
 
   const sendTextMessage = useCallback(
-    (text: string) => {
+    (text: string): boolean => {
       const trimmed = text.trim();
       // Image-only sends are valid: the composer enables Send for an
       // attached image even without accompanying text.
-      if ((!trimmed && !uploadedImage) || isNetworkBusyRef.current) return;
+      if ((!trimmed && !uploadedImage) || isNetworkBusyRef.current) return false;
       stopSpeaking();
       processMessage(trimmed, uploadedImage);
+      return true;
     },
     [processMessage, uploadedImage, stopSpeaking]
   );
+
+  // Interrupt an active generation stream while keeping any partial text
+  // rendered so far (marked truncated in processMessage's catch path).
+  const stopGenerating = useCallback(() => {
+    if (!abortControllerRef.current && !isNetworkBusyRef.current) return;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    addSessionEvent('Generation stopped', 'Cancelled by user', 'normal');
+  }, [addSessionEvent]);
 
   // Read an existing reply aloud directly — no LLM round-trip, nothing
   // appended to history.
@@ -440,11 +452,13 @@ export function useChatPipeline({
   // clear pipeline-owned state. Speech/localStorage concerns live above.
   const resetConversation = useCallback(() => {
     requestGenerationRef.current++;
+    imageOptimizeSeqRef.current++;
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
     isNetworkBusyRef.current = false;
+    setUploadedImage(null);
     setMessages([]);
     setToolEvents([]);
     setStatus('idle');
@@ -470,6 +484,7 @@ export function useChatPipeline({
     degradedReason,
     processMessage,
     sendTextMessage,
+    stopGenerating,
     retryLastMessage,
     speakMessage,
     resetConversation,
