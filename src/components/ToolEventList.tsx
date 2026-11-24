@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Calendar, Download, X } from 'lucide-react';
 import { Banner } from '@astryxdesign/core/Banner';
 import { Button } from '@astryxdesign/core/Button';
@@ -68,6 +69,8 @@ export default function ToolEventList({
   onDismiss,
   defaultExpanded = true,
 }: ToolEventListProps) {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+
   if (events.length === 0) return null;
 
   const icsEvents = events.filter((ev) => Boolean(ev.ics));
@@ -130,17 +133,18 @@ export default function ToolEventList({
       <ChatToolCalls
         calls={calls}
         label={`Tool activity (${events.length})`}
-        defaultIsExpanded={defaultExpanded}
+        isExpanded={isExpanded}
+        onExpandedChange={setIsExpanded}
       />
-      {/* Keep .ics download and simulated device disclosure immediately actionable without expanding */}
-      {hasSimulated ? (
+      {/* Keep .ics download and simulated device disclosure actionable even when collapsed */}
+      {!isExpanded && hasSimulated ? (
         <Banner
           status="warning"
           title="Simulated — no device connected"
           description="Smart-home actions simulate local state changes only."
         />
       ) : null}
-      {icsEvents.length > 0 ? (
+      {!isExpanded && icsEvents.length > 0 ? (
         <HStack gap={2} wrap="wrap">
           {icsEvents.map((ev) => (
             <Button

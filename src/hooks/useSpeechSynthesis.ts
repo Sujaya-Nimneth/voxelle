@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect, useSyncExternalStore } from 'react';
-import { chunkTextForSpeech } from '@/lib/speechChunks';
+import { chunkTextForSpeech, cleanTextForSpeech } from '@/lib/speechChunks';
 
 export interface SpeechSettings {
   rate: number;
@@ -20,11 +20,36 @@ interface UseSpeechSynthesisReturn {
   updateSettings: (newSettings: Partial<SpeechSettings>) => void;
 }
 
+const TTS_SETTINGS_KEY = 'voxelle_tts_settings';
+
 const DEFAULT_SETTINGS: SpeechSettings = {
   rate: 1.0,
   pitch: 1.0,
   volume: 1.0,
 };
+
+function clampSetting(value: unknown, min: number, max: number, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(min, Math.min(max, value))
+    : fallback;
+}
+
+function readStoredTtsSettings(): SpeechSettings {
+  if (typeof window === 'undefined') return DEFAULT_SETTINGS;
+  try {
+    const raw = localStorage.getItem(TTS_SETTINGS_KEY);
+    if (!raw) return DEFAULT_SETTINGS;
+    const parsed = JSON.parse(raw) as Partial<SpeechSettings>;
+    return {
+      rate: clampSetting(parsed.rate, 0.5, 2.0, DEFAULT_SETTINGS.rate),
+      pitch: clampSetting(parsed.pitch, 0.5, 2.0, DEFAULT_SETTINGS.pitch),
+      volume: clampSetting(parsed.volume, 0, 1, DEFAULT_SETTINGS.volume),
+      voiceURI: typeof parsed.voiceURI === 'string' && parsed.voiceURI ? parsed.voiceURI : undefined,
+    };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
 
 function emptySubscribe() {
   return () => {};
@@ -49,7 +74,7 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
     getTtsServerSnapshot
   );
 
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const utterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
   const currentUtteranceIdRef = useRef<number>(0);
   // Chrome sometimes never fires onstart/onend (hung engine or remote voice);
   // the watchdog force-finishes so `isSpeaking` can't wedge at true forever.
@@ -86,18 +111,31 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
       }
     };
 
+    // Hydrate persisted speech settings after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate client-only storage preference
+    setSettings(readStoredTtsSettings());
+
     updateVoices();
     window.speechSynthesis.addEventListener('voiceschanged', updateVoices);
 
     return () => {
       window.speechSynthesis.removeEventListener('voiceschanged', updateVoices);
       clearWatchdog();
+      utterancesRef.current = [];
       window.speechSynthesis.cancel();
     };
   }, [clearWatchdog]);
 
   const updateSettings = useCallback((newSettings: Partial<SpeechSettings>) => {
-    setSettings((prev) => ({ ...prev, ...newSettings }));
+    setSettings((prev) => {
+      const next = { ...prev, ...newSettings };
+      try {
+        localStorage.setItem(TTS_SETTINGS_KEY, JSON.stringify(next));
+      } catch {
+        // Storage unavailable
+      }
+      return next;
+    });
   }, []);
 
   // iOS/WebKit only honors speechSynthesis.speak() calls made during a user
@@ -137,14 +175,10 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
       const utteranceId = ++currentUtteranceIdRef.current;
 
       // Clean up any ongoing speech
+      utterancesRef.current = [];
       window.speechSynthesis.cancel();
 
-      // Strip markdown formatting symbols so TTS doesn't read out "**bold**" or "`code`"
-      const cleanedText = text
-        .replace(/[*_~`#>[\]]/g, '')
-        .replace(/\(.*?\)/g, '')
-        .replace(/\n+/g, '. ')
-        .trim();
+      const cleanedText = cleanTextForSpeech(text);
 
       if (!cleanedText) {
         onEnd?.();
@@ -183,6 +217,7 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
 
       const finish = () => {
         clearWatchdog();
+        utterancesRef.current = [];
         setIsSpeaking(false);
         onEnd?.();
       };
@@ -210,9 +245,9 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
         chunks.forEach((chunk, index) => {
           const isLast = index === chunks.length - 1;
           const utterance = new SpeechSynthesisUtterance(chunk);
-          if (index === 0) {
-            utteranceRef.current = utterance;
-          }
+          // Retain every queued utterance until completion so Chromium/WebKit
+          // GC cannot collect middle/final utterances before `onend` fires.
+          utterancesRef.current.push(utterance);
 
           if (chosenVoice) {
             utterance.voice = chosenVoice;
@@ -277,6 +312,7 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     currentUtteranceIdRef.current++;
     clearWatchdog();
+    utterancesRef.current = [];
     window.speechSynthesis.cancel();
     setIsSpeaking(false);
   }, [clearWatchdog]);

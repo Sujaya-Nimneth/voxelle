@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { chunkTextForSpeech } from '../src/lib/speechChunks.ts';
+import { chunkTextForSpeech, cleanTextForSpeech } from '../src/lib/speechChunks.ts';
 
 describe('chunkTextForSpeech', () => {
   test('short text passes through as a single chunk', () => {
@@ -51,5 +51,27 @@ describe('chunkTextForSpeech', () => {
     for (const chunk of chunks) {
       assert.ok(chunk.length <= 200, `chunk too long: ${chunk.length}`);
     }
+  });
+});
+
+describe('cleanTextForSpeech', () => {
+  test('preserves normal parenthetical prose while stripping markdown links', () => {
+    const input =
+      'TimesFM (Time-Series Foundation Model) and [OpenAI](https://openai.com) total $37.88 (including 18% tip).';
+    const cleaned = cleanTextForSpeech(input);
+    assert.ok(cleaned.includes('(Time-Series Foundation Model)'));
+    assert.ok(cleaned.includes('(including 18% tip)'));
+    assert.ok(cleaned.includes('OpenAI'));
+    assert.ok(!cleaned.includes('https://openai.com'));
+  });
+
+  test('strips markdown headings, emphasis, and code fences cleanly', () => {
+    const input = '## Summary\n**Bold** and `inline`\n```js\nconst x = 1;\n```';
+    const cleaned = cleanTextForSpeech(input);
+    assert.ok(!cleaned.includes('#'));
+    assert.ok(!cleaned.includes('**'));
+    assert.ok(!cleaned.includes('`'));
+    assert.ok(cleaned.includes('Bold and inline'));
+    assert.ok(cleaned.includes('code snippet'));
   });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { toolDefinitions } from '@/lib/tools';
 import { generateId } from '@/lib/ids';
 import type { SessionEvent } from '@/types/types';
@@ -12,7 +12,7 @@ export function createInitialSessionEvents(now: number): SessionEvent[] {
     {
       id: 'init-1',
       title: 'Workspace connected',
-      subtitle: 'SESSION STARTED',
+      subtitle: 'Session started',
       timestamp: now,
       status: 'normal',
     },
@@ -20,15 +20,15 @@ export function createInitialSessionEvents(now: number): SessionEvent[] {
       id: 'init-2',
       title: `${toolDefinitions.length} tools available`,
       subtitle: 'Calendar · Smart home · Calculator · World clock',
-      timestamp: now - 1000,
+      timestamp: now > 0 ? now - 1000 : 0,
       status: 'normal',
     },
     {
       id: 'init-3',
       title: 'No actions currently running',
-      subtitle: 'AWAITING INPUT',
-      timestamp: now - 2000,
-      status: 'warn',
+      subtitle: 'Awaiting input',
+      timestamp: now > 0 ? now - 2000 : 0,
+      status: 'normal',
     },
   ];
 }
@@ -38,6 +38,19 @@ export function useSessionEvents() {
   const [sessionEvents, setSessionEvents] = useState<SessionEvent[]>(() =>
     createInitialSessionEvents(0)
   );
+
+  useEffect(() => {
+    const mountedAt = Date.now();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate client mount timestamps without SSR mismatch
+    setSessionEvents((prev) =>
+      prev.map((ev) => {
+        if (ev.id === 'init-1' && ev.timestamp === 0) return { ...ev, timestamp: mountedAt };
+        if (ev.id === 'init-2' && ev.timestamp === 0) return { ...ev, timestamp: mountedAt - 1000 };
+        if (ev.id === 'init-3' && ev.timestamp === 0) return { ...ev, timestamp: mountedAt - 2000 };
+        return ev;
+      })
+    );
+  }, []);
 
   const addSessionEvent = useCallback(
     (title: string, subtitle: string, eventStatus: 'normal' | 'warn' | 'success' = 'normal') => {

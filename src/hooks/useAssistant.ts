@@ -33,6 +33,7 @@ export function useAssistant() {
     startListening,
     stopListening,
     clearTranscript,
+    clearError: clearSttError,
     error: sttError,
     isSupported: sttSupported,
   } = useSpeechRecognition();
@@ -167,7 +168,7 @@ export function useAssistant() {
   useEffect(() => {
     if (isListening && pipeline.statusRef.current === 'idle') {
       pipeline.setStatus('listening');
-      addSessionEvent('Microphone open', 'BROWSER SPEECH RECOGNITION', 'normal');
+      addSessionEvent('Microphone open', 'Browser speech recognition', 'normal');
     } else if (!isListening && pipeline.statusRef.current === 'listening') {
       pipeline.setStatus('idle');
     }
@@ -183,7 +184,7 @@ export function useAssistant() {
   const toggleListening = useCallback(() => {
     if (isListening) {
       stopListening();
-      addSessionEvent('Listening paused', 'MIC CLOSED', 'normal');
+      addSessionEvent('Listening paused', 'Mic closed', 'normal');
     } else {
       // If Voxelle is speaking or idle, start listening immediately (interrupting speech)
       stopSpeaking();
@@ -205,6 +206,7 @@ export function useAssistant() {
     uploadedImage: pipeline.uploadedImage,
     setUploadedImage: pipeline.setUploadedImage,
     sttError,
+    clearSttError,
     sttSupported,
     ttsSupported,
     isListening,

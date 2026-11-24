@@ -63,6 +63,7 @@ interface UseSpeechRecognitionReturn {
   startListening: () => void;
   stopListening: () => void;
   clearTranscript: () => void;
+  clearError: () => void;
   error: string | null;
   isSupported: boolean;
 }
@@ -146,6 +147,13 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const audioCtx = new AudioCtx();
       audioContextRef.current = audioCtx;
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume().catch(() => {});
+        if (analyserGenerationRef.current !== generation) {
+          audioCtx.close().catch(() => {});
+          return;
+        }
+      }
 
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
@@ -305,6 +313,10 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     setInterimTranscript('');
   }, []);
 
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
   return {
     transcript,
     interimTranscript,
@@ -312,6 +324,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     startListening,
     stopListening,
     clearTranscript,
+    clearError,
     error,
     isSupported,
   };
