@@ -1,6 +1,6 @@
 # Voxelle — Complete UI/UX Redesign Plan (Astryx)
 
-**Status:** Plan saved, **not implemented**. Ready to be continued by another agent.
+**Status:** Implemented (archived planning record — see [ux-workspace-spec.md](./ux-workspace-spec.md) and [qa-plan.md](./qa-plan.md)).
 **Date:** 2026-11-12
 **Target:** [voxelle](../) — Next.js 16 App Router · React 19 · TS strict · Tailwind v4
 **Design system:** Astryx Core/CLI `0.7.13` (project install pending). A newer `0.7.14` exists — pin the same version for `@astryxdesign/core`, `@astryxdesign/cli`, and `@astryxdesign/theme-neutral`.
