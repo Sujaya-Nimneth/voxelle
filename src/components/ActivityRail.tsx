@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Activity, Cpu, ShieldCheck, Wrench } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, Cpu, Info, ShieldCheck, Wrench } from 'lucide-react';
 import { Badge } from '@astryxdesign/core/Badge';
 import { BottomSheet } from '@astryxdesign/core/BottomSheet';
 import { Card } from '@astryxdesign/core/Card';
@@ -123,20 +123,32 @@ export default function ActivityRail({
 
         {sessionEvents.length > 0 ? (
           <List density="compact">
-            {sessionEvents.map((ev) => (
-              <ListItem
-                key={ev.id}
-                label={ev.title}
-                description={ev.subtitle}
-                className={useContentVisibility ? 'vox-cv-auto' : undefined}
-                endContent={
-                  <Timestamp
-                    value={new Date(ev.timestamp).toISOString()}
-                    format="time"
-                  />
-                }
-              />
-            ))}
+            {sessionEvents.map((ev) => {
+              const StatusIcon =
+                ev.status === 'warn'
+                  ? AlertTriangle
+                  : ev.status === 'success'
+                    ? CheckCircle2
+                    : Info;
+              return (
+                <ListItem
+                  key={ev.id}
+                  align="first-line"
+                  startContent={<StatusIcon size={14} aria-hidden="true" />}
+                  label={ev.title}
+                  description={ev.subtitle}
+                  className={useContentVisibility ? 'vox-cv-auto' : undefined}
+                  endContent={
+                    ev.timestamp > 0 ? (
+                      <Timestamp
+                        value={new Date(ev.timestamp).toISOString()}
+                        format="time"
+                      />
+                    ) : undefined
+                  }
+                />
+              );
+            })}
           </List>
         ) : (
           <Text type="supporting" color="secondary">

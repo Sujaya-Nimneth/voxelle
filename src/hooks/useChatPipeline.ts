@@ -256,7 +256,7 @@ export function useChatPipeline({
             setToolEvents((prev) => [...prev, toolEvent]);
             addSessionEvent(
               `Tool executing: ${tc.name.replace(/_/g, ' ')}`,
-              'EXECUTED SERVER-SIDE',
+              'Executed server-side',
               'warn'
             );
           },
@@ -277,7 +277,7 @@ export function useChatPipeline({
             );
             addSessionEvent(
               `Tool ${result.ok ? 'completed' : 'rejected'}: ${name.replace(/_/g, ' ')}`,
-              result.ok ? 'RESULT SENT BACK TO MODEL' : 'UNKNOWN TOOL NAME',
+              result.ok ? 'Result sent back to model' : 'Unknown tool name',
               result.ok ? 'success' : 'warn'
             );
           },
@@ -325,15 +325,15 @@ export function useChatPipeline({
         addSessionEvent(
           'Reply streamed',
           ttft !== null
-            ? `${ttft}MS TO FIRST TOKEN · ${finalText.length} CHARS`
-            : `${finalText.length} CHARS`,
+            ? `${ttft} ms to first token · ${finalText.length} chars`
+            : `${finalText.length} chars`,
           'normal'
         );
 
         if (wasTruncated) {
           const why = !streamResult.done
-            ? 'STREAM ENDED EARLY'
-            : `FINISH REASON: ${streamResult.finishReason}`;
+            ? 'Stream ended early'
+            : `Finish reason: ${streamResult.finishReason}`;
           addSessionEvent('Response truncated', why, 'warn');
         }
 
@@ -346,14 +346,14 @@ export function useChatPipeline({
         // Voice playback if autoSpeak is enabled and TTS is supported
         if (autoSpeak && ttsSupported && finalText && !wasTruncated) {
           setStatus('speaking');
-          addSessionEvent('Voice response active', 'BROWSER SPEECH SYNTHESIS', 'normal');
+          addSessionEvent('Voice response active', 'Browser speech synthesis', 'normal');
           speak(finalText, () => {
             setStatus('idle');
-            addSessionEvent('Workspace nominal', 'AWAITING INPUT', 'warn');
+            addSessionEvent('Workspace nominal', 'Awaiting input', 'normal');
           });
         } else {
           setStatus('idle');
-          addSessionEvent('Workspace nominal', 'AWAITING INPUT', 'warn');
+          addSessionEvent('Workspace nominal', 'Awaiting input', 'normal');
         }
       } catch (err: unknown) {
         disarmTimeout();
@@ -386,7 +386,7 @@ export function useChatPipeline({
             console.warn('Assistant stream stalled and timed out after 35s without progress.');
             appendSystemError('The assistant took too long to respond. Please try again.');
             setStatus('idle');
-            addSessionEvent('Signal timed out', 'RETRY AVAILABLE', 'warn');
+            addSessionEvent('Signal timed out', 'Retry available', 'warn');
           } else {
             console.warn('Assistant request was cancelled.');
             setStatus('idle');
@@ -401,7 +401,7 @@ export function useChatPipeline({
             : 'An error occurred while communicating with the assistant.'
         );
         setStatus('idle');
-        addSessionEvent('Signal interrupted', 'RETRY AVAILABLE', 'warn');
+        addSessionEvent('Signal interrupted', 'Retry available', 'warn');
       }
     },
     [autoSpeak, ttsSupported, speak, stopSpeaking, addSessionEvent, appendSystemError]
@@ -444,10 +444,10 @@ export function useChatPipeline({
       if (!text.trim()) return;
       stopSpeaking();
       setStatus('speaking');
-      addSessionEvent('Voice response active', 'BROWSER SPEECH SYNTHESIS', 'normal');
+      addSessionEvent('Voice response active', 'Browser speech synthesis', 'normal');
       speak(text, () => {
         setStatus('idle');
-        addSessionEvent('Workspace nominal', 'AWAITING INPUT', 'warn');
+        addSessionEvent('Workspace nominal', 'Awaiting input', 'normal');
       });
     },
     [speak, stopSpeaking, addSessionEvent]

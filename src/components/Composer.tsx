@@ -25,6 +25,10 @@ import { Token } from '@astryxdesign/core/Token';
 import type { AssistantStatus } from '@/types/types';
 import ImageDropzone, { validateAndReadImageFile } from './ImageDropzone';
 
+function hasOpenDialogOverlay(): boolean {
+  return Boolean(document.querySelector('[role="dialog"], [aria-modal="true"]'));
+}
+
 export interface ComposerProps {
   status: AssistantStatus;
   isListening: boolean;
@@ -72,10 +76,11 @@ export function Composer({
     }
   }, [focusRequestCount]);
 
-  // Global `/` shortcut to focus composer input when not typing in another field
+  // Global `/` shortcut to focus composer input when not typing in another field or dialog
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (hasOpenDialogOverlay()) return;
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -93,9 +98,10 @@ export function Composer({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Global image paste (⌘V / Ctrl+V) even when attachment drawer is closed
+  // Global image paste (⌘V / Ctrl+V) when no modal overlay is active
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
+      if (hasOpenDialogOverlay()) return;
       const items = e.clipboardData?.items;
       if (!items) return;
       for (const item of Array.from(items)) {
