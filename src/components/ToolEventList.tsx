@@ -30,7 +30,14 @@ function summarizeArgs(name: string, args: ToolCallArgs): string | undefined {
     return when ? `${args.title} (${when})` : String(args.title);
   }
   if (name === 'toggle_smart_home_device' && args.device_name) {
-    return args.state ? `${args.device_name}: ${args.state}` : String(args.device_name);
+    const setting = args.setting ? ` (${args.setting})` : '';
+    return args.state ? `${args.device_name}: ${args.state}${setting}` : String(args.device_name);
+  }
+  if (name === 'calculate_expression' && args.expression) {
+    return String(args.expression);
+  }
+  if (name === 'get_world_time' && args.locations) {
+    return String(args.locations);
   }
   return Object.entries(args)
     .filter(([, v]) => v !== undefined && v !== '')
@@ -41,6 +48,8 @@ function summarizeArgs(name: string, args: ToolCallArgs): string | undefined {
 const TOOL_LABELS: Record<string, string> = {
   add_calendar_event: 'Calendar invite',
   toggle_smart_home_device: 'Smart home (Simulated)',
+  calculate_expression: 'Calculator',
+  get_world_time: 'World clock',
 };
 
 export interface ToolEventListProps {

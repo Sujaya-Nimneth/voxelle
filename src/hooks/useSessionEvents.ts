@@ -19,7 +19,7 @@ export function createInitialSessionEvents(now: number): SessionEvent[] {
     {
       id: 'init-2',
       title: `${toolDefinitions.length} tools available`,
-      subtitle: 'CALENDAR · SMART HOME',
+      subtitle: 'Calendar · Smart home · Calculator · World clock',
       timestamp: now - 1000,
       status: 'normal',
     },

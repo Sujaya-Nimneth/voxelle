@@ -287,18 +287,157 @@ const genericResponses = [
   "I'm monitoring your workspace signals. Let me know if you'd like to schedule events or adjust your connected environment.",
 ];
 
+function extractScheduleArgs(userMessage: string): ToolCall['arguments'] {
+  const lower = userMessage.toLowerCase();
+
+  let date = 'Tomorrow';
+  const isoMatch = userMessage.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+  if (isoMatch) date = isoMatch[1];
+  else if (lower.includes('this afternoon')) date = 'This afternoon';
+  else if (lower.includes('tonight') || lower.includes('this evening')) date = 'Today';
+  else if (lower.includes('today')) date = 'Today';
+  else if (lower.includes('tomorrow')) date = 'Tomorrow';
+
+  const timeMatch = userMessage.match(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.))\b/i)
+    ?? userMessage.match(/\bat\s+(\d{1,2}:\d{2})\b/i);
+  const time = timeMatch ? timeMatch[1].trim() : '3:00 PM';
+
+  const durMatch = userMessage.match(/\b(\d{1,3})\s*(?:-|\s)?(?:min|mins|minute|minutes)\b/i);
+  const duration_minutes = durMatch ? Number(durMatch[1]) : undefined;
+
+  let title = 'Project Synchronization';
+  const quoted = userMessage.match(/["“]([^"”]+)["”]/);
+  if (quoted?.[1]) {
+    title = quoted[1].trim();
+  } else {
+    const cleaned = userMessage
+      .replace(/^(?:please\s+)?(?:schedule|book|add|create|set up|draft)\s+(?:a|an|the)?\s*/i, '')
+      .replace(/\b(?:today|tomorrow|this afternoon|tonight|this evening)\b/gi, '')
+      .replace(/\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)?/gi, '')
+      .replace(/\bfor\s+\d{1,3}\s*(?:-|\s)?(?:min|mins|minute|minutes)\b/gi, '')
+      .replace(/\b\d{4}-\d{2}-\d{2}\b/g, '')
+      .replace(/\s+/g, ' ')
+      .replace(/^[\s,.:-]+|[\s,.:-]+$/g, '');
+    if (cleaned.length >= 2 && cleaned.length <= 64) {
+      title = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    }
+  }
+
+  return {
+    title,
+    time,
+    date,
+    ...(duration_minutes ? { duration_minutes } : {}),
+  };
+}
+
+function extractMathExpression(userMessage: string): string | null {
+  const lower = userMessage.toLowerCase().trim();
+  const hasMathCue =
+    /\b(calculate|compute|evaluate|math|split|tip)\b/.test(lower) ||
+    /^\s*[\d($]/.test(userMessage);
+  const exprMatch = userMessage.match(/([0-9($][0-9.,$+\-*/%()\s]*[0-9)])/);
+  if (!hasMathCue || !exprMatch) return null;
+  const candidate = exprMatch[1].trim();
+  if (!/[+\-*/%]/.test(candidate)) return null;
+  return candidate;
+}
+
+function extractWorldTimeLocations(userMessage: string): string | null {
+  const lower = userMessage.toLowerCase();
+  if (!/\b(time|clock)\b/.test(lower) || /\bschedule|meeting|calendar|appointment\b/.test(lower)) {
+    return null;
+  }
+  const inMatch = userMessage.match(/\bin\s+([^?.!]+)/i);
+  if (inMatch?.[1]) {
+    return inMatch[1].trim();
+  }
+  return null;
+}
+
+function extractSmartHomeArgs(userMessage: string): ToolCall['arguments'] {
+  const lower = userMessage.toLowerCase();
+  const state: 'on' | 'off' = /\b(turn\s+off|switch\s+off|shut\s+off|disable|off)\b/.test(lower)
+    ? 'off'
+    : 'on';
+
+  const settingMatch = userMessage.match(/\b(\d{1,3}\s*%|(?:\d{2,3}\s*°?\s*[fc]))\b/i);
+  const setting = settingMatch ? settingMatch[1].replace(/\s+/g, '') : undefined;
+
+  let device_name = 'Living Room Lights';
+  if (lower.includes('thermostat') || lower.includes('ac') || lower.includes('temperature') || lower.includes('heater')) {
+    device_name = 'Workspace Thermostat';
+  } else if (lower.includes('fan')) {
+    device_name = 'Workspace Fan';
+  } else if (lower.includes('desk lamp')) {
+    device_name = 'Desk Lamp';
+  } else if (lower.includes('studio')) {
+    device_name = 'Studio Focus Lights';
+  }
+
+  return {
+    device_name,
+    state,
+    ...(setting ? { setting } : {}),
+  };
+}
+
 export function getMockResponse(userMessage: string): {
   response: string;
   toolCalls?: ToolCall[];
 } {
   const lowerMessage = userMessage.toLowerCase().trim();
 
+  const mathExpr = extractMathExpression(userMessage);
+  if (mathExpr) {
+    return {
+      response: '',
+      toolCalls: [
+        {
+          id: `tool_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+          name: 'calculate_expression',
+          arguments: { expression: mathExpr },
+          status: 'executing',
+        },
+      ],
+    };
+  }
+
+  const worldLocations = extractWorldTimeLocations(userMessage);
+  if (worldLocations) {
+    return {
+      response: '',
+      toolCalls: [
+        {
+          id: `tool_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+          name: 'get_world_time',
+          arguments: { locations: worldLocations },
+          status: 'executing',
+        },
+      ],
+    };
+  }
+
   for (const scenario of mockScenarios) {
     if (scenario.keywords.some((kw) => lowerMessage.includes(kw))) {
-      const toolCalls: ToolCall[] | undefined = scenario.toolCall
+      let toolCallSpec = scenario.toolCall;
+      let responseText = scenario.response;
+
+      if (scenario.toolCall?.name === 'add_calendar_event' && scenario.keywords.includes('schedule')) {
+        const dynamicArgs = extractScheduleArgs(userMessage);
+        toolCallSpec = { name: 'add_calendar_event', arguments: dynamicArgs };
+        responseText = `I've scheduled "${dynamicArgs.title}" for ${dynamicArgs.date} at ${dynamicArgs.time}. Download the .ics invite below to add it to your calendar.`;
+      } else if (scenario.toolCall?.name === 'toggle_smart_home_device' && scenario.keywords.includes('light')) {
+        const dynamicArgs = extractSmartHomeArgs(userMessage);
+        toolCallSpec = { name: 'toggle_smart_home_device', arguments: dynamicArgs };
+        const settingPart = dynamicArgs.setting ? ` (${dynamicArgs.setting})` : '';
+        responseText = `Simulated: ${dynamicArgs.device_name} set to ${dynamicArgs.state}${settingPart}. No physical hub is connected.`;
+      }
+
+      const toolCalls: ToolCall[] | undefined = toolCallSpec
         ? [
             {
-              ...scenario.toolCall,
+              ...toolCallSpec,
               id: `tool_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
               status: 'executing' as const,
             },
@@ -306,7 +445,7 @@ export function getMockResponse(userMessage: string): {
         : undefined;
 
       return {
-        response: scenario.response,
+        response: responseText,
         toolCalls,
       };
     }
