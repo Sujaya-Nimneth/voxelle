@@ -38,6 +38,10 @@ export const toolDefinitions: ToolDefinition[] = [
           type: 'string',
           description: 'The date of the event (e.g. "today", "tomorrow", "this afternoon", "2026-09-18")',
         },
+        duration_minutes: {
+          type: 'number',
+          description: 'Optional duration of the event in minutes (defaults to 60)',
+        },
       },
       required: ['title', 'time', 'date'],
     },
@@ -45,7 +49,7 @@ export const toolDefinitions: ToolDefinition[] = [
   {
     name: 'toggle_smart_home_device',
     description:
-      'Turns a smart home device on or off. Use this when the user asks to control, turn on, turn off, enable, or disable a home device like lights, thermostat, fan, TV, etc.',
+      'Turns a smart home device on or off or adjusts its setting. Use this when the user asks to control, turn on, turn off, dim, enable, or disable a home device like lights, thermostat, fan, TV, etc.',
     parameters: {
       type: 'object',
       properties: {
@@ -58,8 +62,42 @@ export const toolDefinitions: ToolDefinition[] = [
           enum: ['on', 'off'],
           description: 'Whether to turn the device on or off',
         },
+        setting: {
+          type: 'string',
+          description: 'Optional level, brightness, or temperature setting (e.g. "40%", "71°F")',
+        },
       },
       required: ['device_name', 'state'],
+    },
+  },
+  {
+    name: 'calculate_expression',
+    description:
+      'Evaluates a basic arithmetic expression (+, -, *, /, %, parentheses) and returns the exact result.',
+    parameters: {
+      type: 'object',
+      properties: {
+        expression: {
+          type: 'string',
+          description: 'The arithmetic expression to evaluate (e.g. "128.40 * 1.18 / 4")',
+        },
+      },
+      required: ['expression'],
+    },
+  },
+  {
+    name: 'get_world_time',
+    description:
+      'Checks the current local time and day for one or more cities or IANA time zones.',
+    parameters: {
+      type: 'object',
+      properties: {
+        locations: {
+          type: 'string',
+          description: 'Comma-separated city names or IANA time zones (e.g. "Tokyo, London")',
+        },
+      },
+      required: ['locations'],
     },
   },
 ];
@@ -98,8 +136,17 @@ export function formatToolResult(toolCall: ToolCall): string {
       return `Scheduled "${arg(title, 'untitled event')}" for ${arg(date, 'unspecified date')} at ${arg(time, 'unspecified time')}.`;
     }
     case 'toggle_smart_home_device': {
-      const { device_name, state } = toolCall.arguments;
-      return `${arg(device_name, 'Device')} has been set to ${arg(state, 'the requested state')}.`;
+      const { device_name, state, setting } = toolCall.arguments;
+      const suffix = setting !== undefined && setting !== '' ? ` (${setting})` : '';
+      return `${arg(device_name, 'Device')} has been set to ${arg(state, 'the requested state')}${suffix}.`;
+    }
+    case 'calculate_expression': {
+      const { expression } = toolCall.arguments;
+      return `Calculated ${arg(expression, 'expression')}.`;
+    }
+    case 'get_world_time': {
+      const { locations } = toolCall.arguments;
+      return `Checked current time for ${arg(locations, 'requested locations')}.`;
     }
     default:
       return `Executed ${toolCall.name}`;
@@ -113,7 +160,15 @@ export function formatToolNarrative(toolCall: ToolCall): string {
     return `I've scheduled "${arg(toolCall.arguments.title, 'an event')}" for ${arg(toolCall.arguments.date, 'an unspecified date')} at ${arg(toolCall.arguments.time, 'an unspecified time')}.`;
   }
   if (toolCall.name === 'toggle_smart_home_device') {
-    return `I've turned ${arg(toolCall.arguments.state, 'on')} the ${arg(toolCall.arguments.device_name, 'device')}.`;
+    const setting = toolCall.arguments.setting;
+    const suffix = setting !== undefined && setting !== '' ? ` (${setting})` : '';
+    return `I've turned ${arg(toolCall.arguments.state, 'on')} the ${arg(toolCall.arguments.device_name, 'device')}${suffix}.`;
+  }
+  if (toolCall.name === 'calculate_expression') {
+    return `I've calculated ${arg(toolCall.arguments.expression, 'the expression')}.`;
+  }
+  if (toolCall.name === 'get_world_time') {
+    return `Here is the current time for ${arg(toolCall.arguments.locations, 'those locations')}.`;
   }
   return `I've executed ${toolCall.name.replace(/_/g, ' ')}.`;
 }
