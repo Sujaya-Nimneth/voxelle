@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { generateId } from '@/lib/ids';
 import type { Message } from '@/types/types';
 
@@ -241,13 +241,16 @@ export function useConversations() {
 
   const persistActiveStable = useCallback((m: Message[]) => persistRef.current(m), []);
 
-  return {
-    conversations,
-    activeId,
-    readActive,
-    persistActive: persistActiveStable,
-    switchTo,
-    createNew,
-    remove,
-  };
+  return useMemo(
+    () => ({
+      conversations,
+      activeId,
+      readActive,
+      persistActive: persistActiveStable,
+      switchTo,
+      createNew,
+      remove,
+    }),
+    [conversations, activeId, readActive, persistActiveStable, switchTo, createNew, remove]
+  );
 }

@@ -3,10 +3,9 @@
 import {
   createContext,
   useContext,
-  useState,
-  useEffect,
   useCallback,
   useMemo,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react';
 import {Theme} from '@astryxdesign/core/theme';
@@ -43,27 +42,66 @@ function readStoredMode(): ThemeMode {
   return 'system';
 }
 
-export function AppThemeProvider({children}: {children: ReactNode}) {
-  const [mode, setModeState] = useState<ThemeMode>('system');
-  const [systemPrefersDark, setSystemPrefersDark] = useState(true);
+let inMemoryMode: ThemeMode | null = null;
+const modeListeners = new Set<() => void>();
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate client-only theme preference after mount
-    setModeState(readStoredMode());
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    setSystemPrefersDark(mq.matches);
-    const onChange = (e: MediaQueryListEvent) => setSystemPrefersDark(e.matches);
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
+function subscribeMode(listener: () => void): () => void {
+  modeListeners.add(listener);
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === STORAGE_KEY) {
+      inMemoryMode = null;
+      listener();
+    }
+  };
+  window.addEventListener('storage', onStorage);
+  return () => {
+    modeListeners.delete(listener);
+    window.removeEventListener('storage', onStorage);
+  };
+}
+
+function getModeSnapshot(): ThemeMode {
+  return inMemoryMode ?? readStoredMode();
+}
+
+function getModeServerSnapshot(): ThemeMode {
+  return 'system';
+}
+
+function subscribePrefersDark(listener: () => void): () => void {
+  const mq = window.matchMedia('(prefers-color-scheme: dark)');
+  mq.addEventListener('change', listener);
+  return () => mq.removeEventListener('change', listener);
+}
+
+function getPrefersDarkSnapshot(): boolean {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+function getPrefersDarkServerSnapshot(): boolean {
+  return true;
+}
+
+export function AppThemeProvider({children}: {children: ReactNode}) {
+  const mode = useSyncExternalStore(
+    subscribeMode,
+    getModeSnapshot,
+    getModeServerSnapshot
+  );
+  const systemPrefersDark = useSyncExternalStore(
+    subscribePrefersDark,
+    getPrefersDarkSnapshot,
+    getPrefersDarkServerSnapshot
+  );
 
   const setMode = useCallback((next: ThemeMode) => {
-    setModeState(next);
+    inMemoryMode = next;
     try {
       localStorage.setItem(STORAGE_KEY, next);
     } catch {
       // Storage may be unavailable; in-memory state still updates.
     }
+    modeListeners.forEach((listener) => listener());
   }, []);
 
   const resolvedDark = mode === 'dark' || (mode === 'system' && systemPrefersDark);

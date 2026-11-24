@@ -49,9 +49,38 @@ export function useAssistant() {
   } = useSpeechSynthesis();
 
   const { sessionEvents, addSessionEvent } = useSessionEvents();
-  const conversations = useConversations();
+  const {
+    conversations: conversationList,
+    activeId: activeConversationId,
+    readActive,
+    persistActive,
+    switchTo,
+    createNew,
+    remove,
+  } = useConversations();
 
-  const pipeline = useChatPipeline({
+  const {
+    status,
+    setStatus,
+    statusRef,
+    messages,
+    setMessages,
+    toolEvents,
+    dismissToolEvent,
+    uploadedImage,
+    setUploadedImage,
+    activeProvider,
+    activeModel,
+    isDegraded,
+    degradedReason,
+    processMessage,
+    sendTextMessage,
+    stopGenerating,
+    retryLastMessage,
+    speakMessage,
+    resetConversation,
+    isBusy,
+  } = useChatPipeline({
     addSessionEvent,
     speak,
     stopSpeaking,
@@ -61,29 +90,28 @@ export function useAssistant() {
 
   // One-time load of the active thread once conversations hydrate.
   useEffect(() => {
-    if (initialLoadRef.current || !conversations.activeId) return;
+    if (initialLoadRef.current || !activeConversationId) return;
     initialLoadRef.current = true;
-    const stored = conversations.readActive();
+    const stored = readActive();
     if (stored.length > 0) {
       suppressPersistSnapshotRef.current = stored;
-      pipeline.setMessages(stored);
+      setMessages(stored);
     }
     setHydrated(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-time load
-  }, [conversations.activeId]);
+  }, [activeConversationId]);
 
   // Persist the active thread whenever its messages settle. persistActive
   // keeps a stable identity, so this effect runs on message changes only.
-  const persistActive = conversations.persistActive;
   useEffect(() => {
     if (!hydrated) return;
-    if (suppressPersistSnapshotRef.current === pipeline.messages) {
+    if (suppressPersistSnapshotRef.current === messages) {
       suppressPersistSnapshotRef.current = null;
       return;
     }
     suppressPersistSnapshotRef.current = null;
-    persistActive(pipeline.messages);
-  }, [pipeline.messages, hydrated, persistActive]);
+    persistActive(messages);
+  }, [messages, hydrated, persistActive]);
 
   // Hydrate the auto-speak preference.
   useEffect(() => {
@@ -112,31 +140,31 @@ export function useAssistant() {
 
   const handleSwitchConversation = useCallback(
     (id: string) => {
-      if (id === conversations.activeId) return;
+      if (id === activeConversationId) return;
       stopSpeaking();
-      pipeline.resetConversation();
-      const stored = conversations.readActive(id);
+      resetConversation();
+      const stored = readActive(id);
       suppressPersistSnapshotRef.current = stored;
-      pipeline.setMessages(stored);
-      conversations.switchTo(id);
+      setMessages(stored);
+      switchTo(id);
     },
-    [conversations, pipeline, stopSpeaking]
+    [activeConversationId, readActive, resetConversation, setMessages, stopSpeaking, switchTo]
   );
 
   const handleNewConversation = useCallback((): string => {
     stopSpeaking();
     const empty: Message[] = [];
     suppressPersistSnapshotRef.current = empty;
-    pipeline.resetConversation();
-    pipeline.setMessages(empty);
-    return conversations.createNew();
-  }, [conversations, pipeline, stopSpeaking]);
+    resetConversation();
+    setMessages(empty);
+    return createNew();
+  }, [createNew, resetConversation, setMessages, stopSpeaking]);
 
   const handleDeleteConversation = useCallback(
     (id: string): string | null => {
-      const wasActive = id === conversations.activeId;
-      const remaining = conversations.conversations.filter((c) => c.id !== id);
-      conversations.remove(id);
+      const wasActive = id === activeConversationId;
+      const remaining = conversationList.filter((c) => c.id !== id);
+      remove(id);
       if (wasActive) {
         if (remaining.length > 0) {
           handleSwitchConversation(remaining[0].id);
@@ -146,13 +174,13 @@ export function useAssistant() {
       }
       return null;
     },
-    [conversations, handleSwitchConversation, handleNewConversation]
+    [activeConversationId, conversationList, handleNewConversation, handleSwitchConversation, remove]
   );
 
   // Watch speech recognition transcript
   useEffect(() => {
     if (!transcript) return;
-    if (pipeline.isBusy()) {
+    if (isBusy()) {
       // A request is already in flight — drop the utterance rather than
       // letting it linger and auto-dispatch unreviewed once the busy
       // period ends.
@@ -161,25 +189,25 @@ export function useAssistant() {
     }
     const textToProcess = transcript;
     clearTranscript();
-    pipeline.processMessage(textToProcess, pipeline.uploadedImage);
-  }, [transcript, pipeline, clearTranscript]);
+    processMessage(textToProcess, uploadedImage);
+  }, [transcript, isBusy, clearTranscript, processMessage, uploadedImage]);
 
   // Sync listening status
   useEffect(() => {
-    if (isListening && pipeline.statusRef.current === 'idle') {
-      pipeline.setStatus('listening');
+    if (isListening && statusRef.current === 'idle') {
+      setStatus('listening');
       addSessionEvent('Microphone open', 'Browser speech recognition', 'normal');
-    } else if (!isListening && pipeline.statusRef.current === 'listening') {
-      pipeline.setStatus('idle');
+    } else if (!isListening && statusRef.current === 'listening') {
+      setStatus('idle');
     }
-  }, [isListening, pipeline, addSessionEvent]);
+  }, [isListening, statusRef, setStatus, addSessionEvent]);
 
   // Sync speaking status
   useEffect(() => {
-    if (isSpeaking && pipeline.statusRef.current !== 'speaking') {
-      pipeline.setStatus('speaking');
+    if (isSpeaking && statusRef.current !== 'speaking') {
+      setStatus('speaking');
     }
-  }, [isSpeaking, pipeline]);
+  }, [isSpeaking, statusRef, setStatus]);
 
   const toggleListening = useCallback(() => {
     if (isListening) {
@@ -193,37 +221,37 @@ export function useAssistant() {
   }, [isListening, startListening, stopListening, stopSpeaking, addSessionEvent]);
 
   return {
-    status: pipeline.status,
-    messages: pipeline.messages,
-    toolEvents: pipeline.toolEvents,
+    status,
+    messages,
+    toolEvents,
     sessionEvents,
     // Threads
-    conversations: conversations.conversations,
-    activeConversationId: conversations.activeId,
+    conversations: conversationList,
+    activeConversationId,
     switchConversation: handleSwitchConversation,
     newConversation: handleNewConversation,
     deleteConversation: handleDeleteConversation,
-    uploadedImage: pipeline.uploadedImage,
-    setUploadedImage: pipeline.setUploadedImage,
+    uploadedImage,
+    setUploadedImage,
     sttError,
     clearSttError,
     sttSupported,
     ttsSupported,
     isListening,
     toggleListening,
-    sendTextMessage: pipeline.sendTextMessage,
-    stopGenerating: pipeline.stopGenerating,
-    retryLastMessage: pipeline.retryLastMessage,
-    dismissToolEvent: pipeline.dismissToolEvent,
+    sendTextMessage,
+    stopGenerating,
+    retryLastMessage,
+    dismissToolEvent,
     stopSpeaking,
-    speakMessage: pipeline.speakMessage,
+    speakMessage,
     interimTranscript,
     autoSpeak,
     toggleAutoSpeak,
-    activeProvider: pipeline.activeProvider,
-    activeModel: pipeline.activeModel,
-    isDegraded: pipeline.isDegraded,
-    degradedReason: pipeline.degradedReason,
+    activeProvider,
+    activeModel,
+    isDegraded,
+    degradedReason,
     voices,
     ttsSettings,
     updateTtsSettings,

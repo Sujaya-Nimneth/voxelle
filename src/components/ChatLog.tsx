@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, type ReactNode } from 'react';
+import { memo, useCallback, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
   Calculator,
@@ -80,7 +80,7 @@ export interface ChatLogProps {
   composer: ReactNode;
 }
 
-export default function ChatLog({
+function ChatLog({
   messages,
   status,
   toolEvents,
@@ -325,3 +325,5 @@ export default function ChatLog({
     </ChatLayout>
   );
 }
+
+export default memo(ChatLog);
