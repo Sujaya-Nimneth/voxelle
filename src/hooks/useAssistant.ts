@@ -122,27 +122,28 @@ export function useAssistant() {
     [conversations, pipeline, stopSpeaking]
   );
 
-  const handleNewConversation = useCallback(() => {
+  const handleNewConversation = useCallback((): string => {
     stopSpeaking();
     const empty: Message[] = [];
     suppressPersistSnapshotRef.current = empty;
     pipeline.resetConversation();
     pipeline.setMessages(empty);
-    conversations.createNew();
+    return conversations.createNew();
   }, [conversations, pipeline, stopSpeaking]);
 
   const handleDeleteConversation = useCallback(
-    (id: string) => {
+    (id: string): string | null => {
       const wasActive = id === conversations.activeId;
       const remaining = conversations.conversations.filter((c) => c.id !== id);
       conversations.remove(id);
       if (wasActive) {
         if (remaining.length > 0) {
           handleSwitchConversation(remaining[0].id);
-        } else {
-          handleNewConversation();
+          return remaining[0].id;
         }
+        return handleNewConversation();
       }
+      return null;
     },
     [conversations, handleSwitchConversation, handleNewConversation]
   );

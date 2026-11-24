@@ -95,9 +95,30 @@ function VoxelleWorkspace() {
   const [focusRequestCount, setFocusRequestCount] = useState(0);
   const [liveAnnouncement, setLiveAnnouncement] = useState('');
 
-  // Sync URL query params (?thread=<id>&panel=activity) into client state
+  // Sync URL query params (?thread=<id>&panel=activity) into client state on
+  // initial load and external URL changes (e.g., browser Back/Forward),
+  // without fighting synchronous local state updates while router.replace settles.
   const initializedFromUrlRef = useRef(false);
+  const lastProcessedSearchRef = useRef<string | null>(null);
+  const pendingUrlQsRef = useRef<string | null>(null);
+  const searchString = searchParams.toString();
+
   useEffect(() => {
+    if (conversations.length === 0) return;
+
+    if (pendingUrlQsRef.current !== null && searchString === pendingUrlQsRef.current) {
+      pendingUrlQsRef.current = null;
+      lastProcessedSearchRef.current = searchString;
+      return;
+    }
+
+    if (initializedFromUrlRef.current && lastProcessedSearchRef.current === searchString) {
+      return;
+    }
+
+    initializedFromUrlRef.current = true;
+    lastProcessedSearchRef.current = searchString;
+
     const paramThread = searchParams.get('thread');
     const paramPanel = searchParams.get('panel');
 
@@ -109,16 +130,9 @@ function VoxelleWorkspace() {
       switchConversation(paramThread);
     }
 
-    if (!initializedFromUrlRef.current) {
-      initializedFromUrlRef.current = true;
-      if (paramPanel === 'activity') {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- initialize panel drawer from URL param once
-        setActivityOpen(true);
-      }
-    } else {
-      setActivityOpen(paramPanel === 'activity');
-    }
-  }, [activeConversationId, conversations, searchParams, switchConversation]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync drawer state from initial/external URL navigation
+    setActivityOpen(paramPanel === 'activity');
+  }, [activeConversationId, conversations, searchParams, searchString, switchConversation]);
 
   const updateUrlParams = useCallback(
     (nextThreadId: string | null, nextActivityOpen: boolean) => {
@@ -134,6 +148,7 @@ function VoxelleWorkspace() {
         params.delete('panel');
       }
       const qs = params.toString();
+      pendingUrlQsRef.current = qs;
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
     [pathname, router, searchParams]
@@ -149,15 +164,23 @@ function VoxelleWorkspace() {
 
   const handleNewConversation = useCallback(() => {
     const createdId = newConversation();
-    if (typeof createdId === 'string') {
-      updateUrlParams(createdId, activityOpen);
-    }
+    updateUrlParams(createdId, activityOpen);
     showToast({
       type: 'info',
       body: 'Started a new conversation thread',
       uniqueID: 'new-thread',
     });
   }, [activityOpen, newConversation, showToast, updateUrlParams]);
+
+  const handleDeleteConversation = useCallback(
+    (id: string) => {
+      const nextThreadId = deleteConversation(id);
+      if (nextThreadId) {
+        updateUrlParams(nextThreadId, activityOpen);
+      }
+    },
+    [activityOpen, deleteConversation, updateUrlParams]
+  );
 
   const handleToggleActivity = useCallback(
     (open: boolean) => {
@@ -340,7 +363,7 @@ function VoxelleWorkspace() {
             activeConversationId={activeConversationId}
             onSelectConversation={handleSelectConversation}
             onNewConversation={handleNewConversation}
-            onDeleteConversation={deleteConversation}
+            onDeleteConversation={handleDeleteConversation}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
             onOpenCapabilities={() => setCapabilitiesOpen(true)}
             onOpenSettings={() => setSettingsOpen(true)}

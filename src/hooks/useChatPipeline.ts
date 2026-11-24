@@ -440,11 +440,13 @@ export function useChatPipeline({
   // clear pipeline-owned state. Speech/localStorage concerns live above.
   const resetConversation = useCallback(() => {
     requestGenerationRef.current++;
+    imageOptimizeSeqRef.current++;
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
     isNetworkBusyRef.current = false;
+    setUploadedImage(null);
     setMessages([]);
     setToolEvents([]);
     setStatus('idle');
