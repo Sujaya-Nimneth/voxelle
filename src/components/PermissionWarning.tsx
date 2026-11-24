@@ -8,6 +8,7 @@ import { Button } from '@astryxdesign/core/Button';
 export interface PermissionWarningProps {
   sttError: string | null;
   sttSupported: boolean;
+  onDismissError?: () => void;
   onFocusComposer?: () => void;
 }
 
@@ -18,6 +19,7 @@ export interface PermissionWarningProps {
 export default function PermissionWarning({
   sttError,
   sttSupported,
+  onDismissError,
   onFocusComposer,
 }: PermissionWarningProps) {
   const [dismissedUnsupported, setDismissedUnsupported] = useState(false);
@@ -31,6 +33,7 @@ export default function PermissionWarning({
         title="Microphone unavailable"
         description={`${sttError} You can continue typing or paste an image below.`}
         isDismissable
+        onDismiss={onDismissError}
         endContent={
           onFocusComposer ? (
             <Button

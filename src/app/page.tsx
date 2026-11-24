@@ -62,6 +62,7 @@ function VoxelleWorkspace() {
     uploadedImage,
     setUploadedImage,
     sttError,
+    clearSttError,
     sttSupported,
     ttsSupported,
     isListening,
@@ -309,6 +310,7 @@ function VoxelleWorkspace() {
           <PermissionWarning
             sttError={sttError}
             sttSupported={sttSupported}
+            onDismissError={clearSttError}
             onFocusComposer={() => setFocusRequestCount((n) => n + 1)}
           />
         }

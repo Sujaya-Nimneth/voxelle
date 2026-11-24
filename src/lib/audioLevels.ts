@@ -4,7 +4,7 @@
 // Only the AudioMeter leaf component subscribes (via useSyncExternalStore),
 // so per-frame updates never re-render the page tree.
 
-export const AUDIO_BAND_COUNT = 11;
+export const AUDIO_BAND_COUNT = 12;
 
 const IDLE_LEVELS: number[] = new Array(AUDIO_BAND_COUNT).fill(0.12);
 

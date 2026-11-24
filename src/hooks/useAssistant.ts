@@ -33,6 +33,7 @@ export function useAssistant() {
     startListening,
     stopListening,
     clearTranscript,
+    clearError: clearSttError,
     error: sttError,
     isSupported: sttSupported,
   } = useSpeechRecognition();
@@ -205,6 +206,7 @@ export function useAssistant() {
     uploadedImage: pipeline.uploadedImage,
     setUploadedImage: pipeline.setUploadedImage,
     sttError,
+    clearSttError,
     sttSupported,
     ttsSupported,
     isListening,
