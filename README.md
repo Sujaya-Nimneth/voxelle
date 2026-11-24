@@ -33,10 +33,18 @@ If the configured provider fails before streaming (missing key, HTTP error), the
 
 ### 🔌 Real agentic tool loop
 Tool calls don't just animate — they execute:
-1. The model emits a function call (`add_calendar_event`, `toggle_smart_home_device`).
-2. The **server executes it**: calendar events produce a genuine RFC 5545 `.ics` file (downloadable from the tool card); smart-home toggles return an explicitly *simulated* result.
+1. The model emits a function call (`add_calendar_event`, `toggle_smart_home_device`, `calculate_expression`, or `get_world_time`).
+2. The **server executes it**: calendar events produce a genuine timezone-aware RFC 5545 `.ics` file (`DTSTART;TZID=...`, downloadable inline or from the Activity drawer); `calculate_expression` evaluates arithmetic via a safe recursive-descent parser (no `eval`); `get_world_time` resolves live city/IANA times via `Intl.DateTimeFormat`; smart-home toggles return an explicitly *simulated* result.
 3. The outcome is sent **back to the model** (Gemini `functionResponse` / Groq `role: "tool"`), and the confirmation it streams is grounded in what actually ran.
 4. Unknown tool names proposed by the model are rejected by a server-side allow-list.
+
+### ⌨️ Keyboard shortcuts & URL state
+- `⌘K` / `Ctrl+K`: Open the workspace command palette & thread switcher
+- `⌘I` / `Ctrl+I`: Toggle the Activity & telemetry drawer
+- `⌘,` / `Ctrl+,`: Open Voice & appearance settings
+- `/`: Focus the message composer (outside inputs and open dialogs)
+- `Esc`: Stop active generation, mute spoken playback, or close the topmost overlay
+- URL query params (`?thread=<id>&panel=activity`) keep the active thread and Activity drawer deep-linkable.
 
 ### 🖼️ Multimodal vision
 Drag & drop, click, or paste (`⌘V`) images. Oversized images are downscaled in-memory before upload; MIME type and size are re-validated server-side.
@@ -72,14 +80,14 @@ Design notes worth reading in the source:
 - **One staleness mechanism** — a generation token bumped by every request and reset governs all late async work (`src/hooks/useChatPipeline.ts`).
 - **Single history policy** — the 10-turn window is defined once (`src/lib/chatResponse.ts`) and re-applied defensively by the server sanitizer.
 - **Truncation honesty** — a stream that ends without `done`, or with `MAX_TOKENS`/`SAFETY`, is flagged in the UI and never spoken aloud as a complete answer.
-- **Zero-dependency markdown renderer** with fenced code blocks, headings, and http(s)-only links (`src/components/MarkdownMessage.tsx`).
+- **Markdown safety** — assistant replies render through Astryx `Markdown` (`@astryxdesign/core/Markdown`) with `http(s):`-only link validation (`src/components/ChatLog.tsx`).
 
 ---
 
 ## 🛠️ Tech stack
 
 - **Next.js 16** (App Router, Turbopack), **React 19**, **TypeScript 5** (strict)
-- **Tailwind CSS v4** design tokens · **Framer Motion 12** · **lucide-react** · **Inter** (`next/font`)
+- **Astryx v0.7.13** (`@astryxdesign/core`, custom `src/themes/voxelle/voxelleTheme.ts`) · **Tailwind CSS v4** · **lucide-react** · **Inter** (`next/font`)
 - **Web Speech API** (STT/TTS) · **Web Audio API** (analyser)
 - Google Generative Language API · Groq Cloud API
 - Tests: native **Node.js test runner** (no test framework dependency)
@@ -113,10 +121,12 @@ Keys live only in `.env.local` (gitignored) and are never sent to the client.
 ### Tests
 
 ```bash
-npm test        # 47 tests: stream parsing, tool executors, .ics generation,
-                # history policy, sanitizers, speech chunking
-npm run lint    # eslint
-npx tsc --noEmit
+npm test                     # 63 tests: stream parsing, tool executors, .ics generation,
+                             # math/world-clock tools, provider helpers, speech chunks
+npm run lint                 # eslint (repo-wide)
+npx tsc --noEmit             # strict typecheck (src + tests)
+npm run build
+npx astryx doctor --built .next
 ```
 
 ---
