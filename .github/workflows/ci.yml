@@ -34,3 +34,6 @@ jobs:
         env:
           # CI has no .env.local; the app must build with defaults (mock).
           AI_PROVIDER: mock
+
+      - name: Astryx Doctor
+        run: npx astryx doctor --built .next
