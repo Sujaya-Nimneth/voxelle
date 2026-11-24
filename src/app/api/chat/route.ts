@@ -27,10 +27,11 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
-// ─── Rate Limiter (Token bucket per client IP) ───
+// ─── Rate Limiter (Token bucket per client IP, bounded FIFO) ───
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const MAX_REQUESTS_PER_WINDOW = 30; // 30 requests per minute
+const MAX_RATE_LIMIT_ENTRIES = 2000;
 
 // One-shot warnings: logging on every request just floods serverless logs.
 const warnedOnce = new Set<string>();
@@ -49,6 +50,7 @@ const ALLOWED_MIME_TYPES = new Set([
   'image/gif',
 ]);
 const MAX_IMAGE_BASE64_LENGTH = 7 * 1024 * 1024; // ~5MB file size
+const MAX_JSON_CONTENT_LENGTH = 8 * 1024 * 1024; // 8MB request cap before buffering JSON
 
 export async function POST(request: NextRequest) {
   try {
@@ -65,7 +67,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Body Parsing & Validation
+    // 2. Payload Size Check & Body Parsing
+    const contentLengthHeader = request.headers.get('content-length');
+    if (contentLengthHeader !== null) {
+      const contentLength = Number(contentLengthHeader);
+      if (Number.isFinite(contentLength) && contentLength > MAX_JSON_CONTENT_LENGTH) {
+        return NextResponse.json(
+          { error: 'Request payload exceeds maximum allowed size (8MB limit)' },
+          { status: 413 }
+        );
+      }
+    }
+
     let body;
     try {
       body = await request.json();
@@ -169,16 +182,22 @@ function checkRateLimit(ip: string): boolean {
   const now = Date.now();
   const client = rateLimitMap.get(ip);
 
-  // Periodically clean up stale records to prevent memory leak
-  if (rateLimitMap.size > 2000) {
-    for (const [key, record] of rateLimitMap.entries()) {
-      if (now > record.resetTime) {
-        rateLimitMap.delete(key);
+  if (!client || now > client.resetTime) {
+    if (client) {
+      rateLimitMap.delete(ip);
+    }
+    if (rateLimitMap.size >= MAX_RATE_LIMIT_ENTRIES) {
+      for (const [key, record] of rateLimitMap.entries()) {
+        if (now > record.resetTime) {
+          rateLimitMap.delete(key);
+        }
+      }
+      while (rateLimitMap.size >= MAX_RATE_LIMIT_ENTRIES) {
+        const oldestKey = rateLimitMap.keys().next().value;
+        if (oldestKey === undefined) break;
+        rateLimitMap.delete(oldestKey);
       }
     }
-  }
-
-  if (!client || now > client.resetTime) {
     rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
     return true;
   }
